@@ -23,6 +23,7 @@ export async function GET(request: Request) {
       }
     }
 
+    const providerNotices: string[] = [];
     const response = NextResponse.json(
       await fetchHotels({
         keyword,
@@ -33,12 +34,18 @@ export async function GET(request: Request) {
         middleClassCode,
         smallClassCode,
         detailClassCode,
+        onNotice: (notice) => providerNotices.push(notice),
       }),
     );
     const hasAreaCode = Boolean(
       areaClassCode || middleClassCode || smallClassCode || detailClassCode,
     );
-    if (
+    if (providerNotices.length > 0) {
+      response.headers.set(
+        "X-Hotel-Search-Notice",
+        encodeURIComponent(providerNotices.join(" / ")),
+      );
+    } else if (
       (!hasCompleteStayCondition || !hasAreaCode) &&
       process.env.USE_MOCK_HOTELS === "false"
     ) {
@@ -55,15 +62,16 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Failed to fetch hotels:", error);
     const message = error instanceof Error ? error.message : "";
-    const isCredentialError = message.includes("RAKUTEN_TRAVEL_");
+    const isCredentialError =
+      message.includes("RAKUTEN_TRAVEL_") || message.includes("JALAN_API_KEY");
     const hasStayCondition = new URL(request.url).searchParams.has("checkIn");
     return NextResponse.json(
       {
         error: isCredentialError
-          ? `楽天APIキーを確認してください: ${message}`
+          ? `APIキーを確認してください: ${message}`
           : hasStayCondition
-          ? "空室情報の取得に失敗しました"
-          : "ホテル情報の取得に失敗しました",
+          ? `空室情報の取得に失敗しました: ${message}`
+          : message || "ホテル情報の取得に失敗しました",
       },
       { status: 500 },
     );

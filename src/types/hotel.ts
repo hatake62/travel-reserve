@@ -8,7 +8,7 @@ export type HotelOffer = {
 };
 
 export type Hotel = {
-  id: number;
+  id: string | number;
   name: string;
   area: string;
   rating: number;

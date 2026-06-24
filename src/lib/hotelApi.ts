@@ -95,6 +95,7 @@ export async function fetchHotels({
     middleClassCode,
     smallClassCode,
     detailClassCode,
+    onNotice,
   });
 }
 
