@@ -14,10 +14,9 @@ export async function GET(request: Request) {
     const middleClassCode = params.get("middleClassCode") ?? undefined;
     const smallClassCode = params.get("smallClassCode") ?? undefined;
     const detailClassCode = params.get("detailClassCode") ?? undefined;
-    const hasStayCondition =
-      checkIn !== undefined || checkOut !== undefined || guests !== undefined;
+    const hasCompleteStayCondition = Boolean(checkIn && checkOut && guests);
 
-    if (hasStayCondition) {
+    if (hasCompleteStayCondition) {
       const validationMessage = validateHotelSearch({ checkIn, checkOut, guests });
       if (validationMessage) {
         return NextResponse.json({ error: validationMessage }, { status: 400 });
@@ -37,25 +36,32 @@ export async function GET(request: Request) {
       }),
     );
     const hasAreaCode = Boolean(
-      areaClassCode && middleClassCode && smallClassCode,
+      areaClassCode || middleClassCode || smallClassCode || detailClassCode,
     );
     if (
-      hasStayCondition &&
-      !hasAreaCode &&
+      (!hasCompleteStayCondition || !hasAreaCode) &&
       process.env.USE_MOCK_HOTELS === "false"
     ) {
       response.headers.set(
         "X-Hotel-Search-Notice",
-        encodeURIComponent("現在はキーワード検索結果を表示しています"),
+        encodeURIComponent(
+          !hasAreaCode
+            ? "地区候補が未選択のため、キーワード検索結果を表示しています"
+            : "宿泊日または人数が不足しているため、キーワード検索結果を表示しています",
+        ),
       );
     }
     return response;
   } catch (error) {
     console.error("Failed to fetch hotels:", error);
+    const message = error instanceof Error ? error.message : "";
+    const isCredentialError = message.includes("RAKUTEN_TRAVEL_");
     const hasStayCondition = new URL(request.url).searchParams.has("checkIn");
     return NextResponse.json(
       {
-        error: hasStayCondition
+        error: isCredentialError
+          ? `楽天APIキーを確認してください: ${message}`
+          : hasStayCondition
           ? "空室情報の取得に失敗しました"
           : "ホテル情報の取得に失敗しました",
       },

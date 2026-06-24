@@ -1,3 +1,5 @@
+import type { RakutenAreaCandidate } from "@/types/rakutenArea";
+
 export type SortBy = "recommended" | "priceAsc" | "priceDesc" | "ratingDesc";
 
 export type BookingSite =
@@ -16,7 +18,7 @@ export type SearchCondition = {
   maxPrice: number | null;
   site: BookingSite;
   breakfastOnly: boolean;
-  areaCandidate?: RakutenAreaCandidate;
+  rakutenAreaCandidate?: RakutenAreaCandidate;
 };
 
 export type HotelSearchParams = {
@@ -24,10 +26,9 @@ export type HotelSearchParams = {
   checkIn?: string;
   checkOut?: string;
   guests?: number;
-  areaCandidate?: RakutenAreaCandidate;
+  rakutenAreaCandidate?: RakutenAreaCandidate;
   areaClassCode?: string;
   middleClassCode?: string;
   smallClassCode?: string;
   detailClassCode?: string;
 };
-import type { RakutenAreaCandidate } from "@/types/rakutenArea";

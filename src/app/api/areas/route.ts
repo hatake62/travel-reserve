@@ -1,3 +1,4 @@
+import { findMockAreaCandidates } from "@/lib/hotelProviders/mockAreaProvider";
 import { findRakutenAreaCandidates } from "@/lib/hotelProviders/rakutenAreaProvider";
 import { NextResponse } from "next/server";
 
@@ -8,7 +9,11 @@ export async function GET(request: Request) {
   if (!keyword) return NextResponse.json([]);
 
   try {
-    const candidates = await findRakutenAreaCandidates(keyword);
+    const findAreaCandidates =
+      process.env.USE_MOCK_HOTELS === "false"
+        ? findRakutenAreaCandidates
+        : findMockAreaCandidates;
+    const candidates = await findAreaCandidates(keyword);
     return NextResponse.json(candidates.slice(0, MAX_CANDIDATES));
   } catch (error) {
     console.error("Failed to fetch Rakuten areas:", error);

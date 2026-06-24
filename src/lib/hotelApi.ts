@@ -45,7 +45,7 @@ export async function fetchHotels({
   checkIn,
   checkOut,
   guests,
-  areaCandidate,
+  rakutenAreaCandidate,
   areaClassCode,
   middleClassCode,
   smallClassCode,
@@ -59,10 +59,10 @@ export async function fetchHotels({
     if (checkIn) params.set("checkIn", checkIn);
     if (checkOut) params.set("checkOut", checkOut);
     if (guests !== undefined) params.set("guests", String(guests));
-    const resolvedAreaClassCode = areaCandidate?.areaClassCode ?? areaClassCode;
-    const resolvedMiddleClassCode = areaCandidate?.middleClassCode ?? middleClassCode;
-    const resolvedSmallClassCode = areaCandidate?.smallClassCode ?? smallClassCode;
-    const resolvedDetailClassCode = areaCandidate?.detailClassCode ?? detailClassCode;
+    const resolvedAreaClassCode = rakutenAreaCandidate?.areaClassCode ?? areaClassCode;
+    const resolvedMiddleClassCode = rakutenAreaCandidate?.middleClassCode ?? middleClassCode;
+    const resolvedSmallClassCode = rakutenAreaCandidate?.smallClassCode ?? smallClassCode;
+    const resolvedDetailClassCode = rakutenAreaCandidate?.detailClassCode ?? detailClassCode;
     if (resolvedAreaClassCode) params.set("areaClassCode", resolvedAreaClassCode);
     if (resolvedMiddleClassCode) params.set("middleClassCode", resolvedMiddleClassCode);
     if (resolvedSmallClassCode) params.set("smallClassCode", resolvedSmallClassCode);
@@ -90,7 +90,7 @@ export async function fetchHotels({
     checkIn,
     checkOut,
     guests,
-    areaCandidate,
+    rakutenAreaCandidate,
     areaClassCode,
     middleClassCode,
     smallClassCode,

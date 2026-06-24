@@ -20,7 +20,7 @@ JALAN_API_KEY=
 USE_MOCK_HOTELS=true
 ```
 
-- `USE_MOCK_HOTELS=true`: `src/data/hotels.ts` の仮データを使用します。APIキーは不要です。
+- `USE_MOCK_HOTELS=true`: ホテルと地区候補の仮データを使用します。APIキーは不要です。
 - `USE_MOCK_HOTELS=false`: 楽天トラベルAPIを使用します。楽天ウェブサービスで取得した `RAKUTEN_TRAVEL_APP_ID` と `RAKUTEN_TRAVEL_ACCESS_KEY` が必要です。
 - `RAKUTEN_AFFILIATE_ID`: 任意です。設定した場合は楽天APIが返すURLに反映されます。
 - `JALAN_API_KEY`: 今回は使用しません。
@@ -33,7 +33,7 @@ npm run dev
 
 起動後、[http://localhost:3000](http://localhost:3000) を開いてください。
 
-楽天API接続時は、`USE_MOCK_HOTELS=false` と必要な認証情報を設定してサーバーを再起動します。`http://localhost:3000/api/hotels?keyword=東京` で変換後のJSONを確認できます。画面の目的地に「東京」「新宿」などを入力した検索も同じ内部APIを使用します。
+楽天API接続時は、`USE_MOCK_HOTELS=false` と必要な認証情報を設定してサーバーを再起動します。`http://localhost:3000/api/hotels?keyword=東京` で変換後のJSONを確認できます。
 
 ## 楽天トラベル地区コードAPI
 
@@ -45,9 +45,9 @@ npm run dev
 /api/areas?keyword=横浜
 ```
 
-空の `keyword` には `[]` を返し、検索結果は最大20件です。検索フォームの「地区候補を確認」からは上位5件を選択できます。選択した候補は表示名だけでなく地区コード一式も検索条件に保持されます。
+空の `keyword` には `[]` を返し、APIの検索結果は最大20件です。検索フォームでは目的地を入力して「地区候補を検索」を押し、上位5件から1件を選択します。選択中の階層名を画面に表示し、表示名と4種類の地区コードを検索条件に保持します。
 
-地区コードAPIも `USE_MOCK_HOTELS` の値に関係なく楽天APIの認証情報が必要です。`.env.local` に次を設定してください。
+楽天の地区コードAPIへ接続する場合は、`.env.local` に次を設定してください。
 
 ```dotenv
 RAKUTEN_TRAVEL_APP_ID=楽天ウェブサービスのアプリID
@@ -60,19 +60,23 @@ USE_MOCK_HOTELS=false
 
 ## 楽天トラベル検索APIへの対応状況
 
-現在の外部API検索は、楽天トラベルキーワード検索APIが中心です。今回、宿泊日と人数を受け取り、空室検索API
-（`Travel/VacantHotelSearch/20170426`）へ接続するためのエンドポイント定義、パラメータ生成、レスポンス変換処理を追加しました。
+ホテル検索は楽天トラベルのキーワード検索APIと空室検索API（`Travel/VacantHotelSearch/20170426`）に対応しています。
 
 内部APIは次の形式に対応しています。
 
 ```text
 /api/hotels?keyword=東京
 /api/hotels?keyword=東京&checkIn=2026-08-01&checkOut=2026-08-02&guests=2
+/api/hotels?keyword=新宿&checkIn=2026-08-01&checkOut=2026-08-02&guests=2&areaClassCode=japan&middleClassCode=tokyo&smallClassCode=tokyo&detailClassCode=（選択候補の値）
 ```
 
-楽天の空室検索APIでは、日付と人数に加えて、施設番号、地区コード、または緯度・経度などの検索範囲指定が必要です。地区候補を選択した検索では、`areaClassCode` を楽天APIの正式なパラメータ名 `largeClassCode` に変換し、`middleClassCode`、`smallClassCode`、`detailClassCode` とともに空室検索APIへ渡します。地区候補を選択していない場合はキーワード検索へフォールバックし、画面には「現在はキーワード検索結果を表示しています」と表示されます。
+画面で地区候補を選ぶと、`SearchCondition.rakutenAreaCandidate`、トップページ、`fetchHotels`、`/api/hotels` の順に地区コードが渡ります。サーバーは内部APIの `areaClassCode` を楽天APIの `largeClassCode` に変換し、残りの地区コードとともに送信します。
 
-- `USE_MOCK_HOTELS=true`（既定）: 外部APIを呼ばず、ローカルの仮データで一覧・詳細・検索UIを確認できます。
+チェックイン日、チェックアウト日、人数がすべて揃い、地区コードが1つ以上ある場合に空室検索APIを呼びます。地区候補が未選択、または宿泊条件が不足している場合はキーワード検索APIへフォールバックし、画面に理由を表示します。空室レスポンスはキーワードレスポンスとは別の変換関数で `Hotel` と `HotelOffer` に変換します。料金を取得できない場合は `0` として保持し、一覧と詳細では「料金未定」または「価格不明」と表示します。
+
+- `USE_MOCK_HOTELS=true`（既定）: ホテル一覧・詳細では楽天APIを呼ばず、ローカルの仮データを使用します。
 - `USE_MOCK_HOTELS=false`: 楽天トラベルAPIへ接続します。認証情報を `.env.local` に設定してください。
 
-空室検索を本格対応する次の段階では、入力中の候補を自動表示するオートコンプリート、候補のランキング、ホテル番号や緯度経度による検索を追加し、空室プランの料金・朝食条件を画面の絞り込みへ反映します。
+`USE_MOCK_HOTELS` はホテル一覧・詳細と地区候補のデータ元をまとめて切り替えます。`true` または未設定ならローカルの仮データ、`false` なら楽天APIを使用します。
+
+次の拡張候補は、入力中に候補を表示するオートコンプリート、候補の関連度順ランキング、検索条件をURLへ保存する機能です。

@@ -29,15 +29,23 @@ type RakutenHotelEntry = {
     roomBasicInfo?: {
       roomName?: string | null;
       planName?: string | null;
-      dailyCharge?: { total?: number | string | null } | null;
+      dailyCharge?: {
+        total?: number | string | null;
+        rakutenCharge?: number | string | null;
+      } | null;
       reserveUrl?: string | null;
       withBreakfastFlag?: number | string | null;
     };
+    dailyCharge?: {
+      total?: number | string | null;
+      rakutenCharge?: number | string | null;
+    } | null;
+    reserveUrl?: string | null;
   }>;
 };
 
 type RakutenHotelResponse = {
-  hotels?: RakutenHotelEntry[];
+  hotels?: unknown[];
   error?: string;
   error_description?: string;
 };
@@ -102,7 +110,7 @@ export type RakutenVacantHotelParams = HotelSearchParams & {
   searchRadius?: number;
 };
 
-export function mapRakutenHotelToHotel(
+export function mapRakutenKeywordHotelToHotel(
   entry: RakutenHotelEntry,
 ): Hotel | null {
   const basicInfo = entry.hotelBasicInfo;
@@ -135,22 +143,34 @@ export function mapRakutenHotelToHotel(
 export function mapRakutenVacantHotelToHotel(
   entry: RakutenHotelEntry,
 ): Hotel | null {
-  const hotel = mapRakutenHotelToHotel(entry);
+  const hotel = mapRakutenKeywordHotelToHotel(entry);
   if (!hotel) return null;
 
   const offers: Hotel["offers"] = (entry.roomInfo ?? []).flatMap(
-    ({ roomBasicInfo }) => {
+    (roomInfo) => {
+      const { roomBasicInfo } = roomInfo;
       if (!roomBasicInfo) return [];
       return [
         {
           site: "楽天トラベル",
-          price: Math.max(0, toFiniteNumber(roomBasicInfo.dailyCharge?.total)),
+          price: Math.max(
+            0,
+            toFiniteNumber(
+              roomInfo.dailyCharge?.total ??
+                roomInfo.dailyCharge?.rakutenCharge ??
+              roomBasicInfo.dailyCharge?.total ??
+                roomBasicInfo.dailyCharge?.rakutenCharge,
+            ),
+          ),
           bookingUrl:
-            roomBasicInfo.reserveUrl || hotel.offers[0]?.bookingUrl || "",
+            roomInfo.reserveUrl ||
+            roomBasicInfo.reserveUrl ||
+            hotel.offers[0]?.bookingUrl ||
+            "",
           roomType:
-            [roomBasicInfo.roomName, roomBasicInfo.planName]
-              .filter(Boolean)
-              .join(" / ") || "空室プラン",
+            roomBasicInfo.planName ||
+            roomBasicInfo.roomName ||
+            "プラン詳細は予約サイトで確認",
           hasBreakfast: String(roomBasicInfo.withBreakfastFlag) === "1",
           cancellation: "予約サイトで確認",
         },
@@ -161,10 +181,43 @@ export function mapRakutenVacantHotelToHotel(
   return offers.length > 0 ? { ...hotel, offers } : hotel;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeRakutenHotelEntry(value: unknown): RakutenHotelEntry | null {
+  if (!isRecord(value)) return null;
+  if (value.hotelBasicInfo) return value as RakutenHotelEntry;
+
+  const parts = Array.isArray(value.hotel) ? value.hotel : [];
+  const entry: RakutenHotelEntry = {};
+  for (const part of parts) {
+    if (!isRecord(part)) continue;
+    if (isRecord(part.hotelBasicInfo)) {
+      entry.hotelBasicInfo = part.hotelBasicInfo as RakutenHotelBasicInfo;
+    }
+    if (isRecord(part.hotelDetailInfo)) {
+      entry.hotelDetailInfo = part.hotelDetailInfo as RakutenHotelEntry["hotelDetailInfo"];
+    }
+    if (Array.isArray(part.roomInfo)) {
+      entry.roomInfo = [
+        ...(entry.roomInfo ?? []),
+        ...(part.roomInfo as NonNullable<RakutenHotelEntry["roomInfo"]>),
+      ];
+    } else if (isRecord(part.roomInfo)) {
+      entry.roomInfo = [
+        ...(entry.roomInfo ?? []),
+        part.roomInfo as NonNullable<RakutenHotelEntry["roomInfo"]>[number],
+      ];
+    }
+  }
+  return entry.hotelBasicInfo ? entry : null;
+}
+
 async function fetchRakutenHotels(
   endpoint: string,
   params: URLSearchParams,
-  mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenHotelToHotel,
+  mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
 ): Promise<Hotel[]> {
   const response = await fetch(`${endpoint}?${params.toString()}`, {
     headers: { Accept: "application/json" },
@@ -182,6 +235,8 @@ async function fetchRakutenHotels(
   }
 
   return (data.hotels ?? [])
+    .map(normalizeRakutenHotelEntry)
+    .filter((entry): entry is RakutenHotelEntry => entry !== null)
     .map(mapper)
     .filter((hotel): hotel is Hotel => hotel !== null);
 }
@@ -200,11 +255,17 @@ export async function getRakutenHotelsByKeyword({
 }
 
 function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
-  const area = params.areaCandidate;
+  const area = params.rakutenAreaCandidate;
   const hasAreaCode = Boolean(
-    (area?.areaClassCode ?? params.areaClassCode ?? params.largeClassCode) &&
-      (area?.middleClassCode ?? params.middleClassCode) &&
-      (area?.smallClassCode ?? params.smallClassCode),
+    area?.areaClassCode ??
+      params.areaClassCode ??
+      params.largeClassCode ??
+      area?.middleClassCode ??
+      params.middleClassCode ??
+      area?.smallClassCode ??
+      params.smallClassCode ??
+      area?.detailClassCode ??
+      params.detailClassCode,
   );
   const hasCoordinates =
     Number.isFinite(params.latitude) && Number.isFinite(params.longitude);
@@ -221,15 +282,13 @@ export async function getRakutenVacantHotels(
   }
 
   // VacantHotelSearch does not accept a free-text keyword as its location.
-  // TODO: resolve keyword to Rakuten area codes or hotel numbers before this call.
-  // TODO: expose area-code and coordinate selection in the search UI/API contract.
   if (!hasVacantSearchArea(options)) {
     return getRakutenHotelsByKeyword({ keyword });
   }
 
   const credentials = getCredentials();
   const params = createSearchParams(credentials);
-  const area = options.areaCandidate;
+  const area = options.rakutenAreaCandidate;
   params.set("checkinDate", checkIn);
   params.set("checkoutDate", checkOut);
   params.set("adultNum", String(guests));

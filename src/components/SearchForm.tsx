@@ -23,7 +23,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
   const [site, setSite] = useState<BookingSite>("");
   const [breakfastOnly, setBreakfastOnly] = useState(false);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
-  const [areaCandidate, setAreaCandidate] = useState<RakutenAreaCandidate>();
+  const [rakutenAreaCandidate, setRakutenAreaCandidate] = useState<RakutenAreaCandidate>();
   const [areaCandidates, setAreaCandidates] = useState<RakutenAreaCandidate[]>([]);
   const [isLoadingAreas, setIsLoadingAreas] = useState(false);
   const [areaError, setAreaError] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
       maxPrice: maxPrice === "" ? null : Number(maxPrice),
       site,
       breakfastOnly,
-      areaCandidate,
+      rakutenAreaCandidate,
     });
   };
 
@@ -98,7 +98,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
             name="destination"
             onChange={(event) => {
               setDestination(event.target.value);
-              setAreaCandidate(undefined);
+              setRakutenAreaCandidate(undefined);
               setAreaCandidates([]);
               setAreaError(null);
             }}
@@ -112,7 +112,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
             onClick={handleFindAreas}
             type="button"
           >
-            {isLoadingAreas ? "地区候補を取得中..." : "地区候補を確認"}
+            {isLoadingAreas ? "地区候補を取得中..." : "地区候補を検索"}
           </button>
           {areaError && <p className="text-xs text-rose-700" role="alert">{areaError}</p>}
           {areaCandidates.length > 0 && (
@@ -123,7 +123,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
                     className="w-full rounded-md px-2 py-2 text-left text-xs font-medium text-slate-700 hover:bg-white hover:text-sky-800"
                     onClick={() => {
                       setDestination(candidate.displayName);
-                      setAreaCandidate(candidate);
+                      setRakutenAreaCandidate(candidate);
                       setAreaCandidates([]);
                       setAreaError(null);
                     }}
@@ -134,6 +134,11 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
                 </li>
               ))}
             </ul>
+          )}
+          {rakutenAreaCandidate && (
+            <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800" role="status">
+              選択中の地区：{rakutenAreaCandidate.displayName}
+            </p>
           )}
         </div>
 
