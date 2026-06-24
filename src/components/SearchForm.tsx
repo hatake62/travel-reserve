@@ -1,13 +1,24 @@
 "use client";
 
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import type { SearchCondition } from "@/types/search";
+
+type SearchFormProps = {
+  onSearch: (condition: SearchCondition) => void;
+};
 
 const inputClassName =
   "h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-4 focus:ring-sky-100";
 
-export default function SearchForm() {
+export default function SearchForm({ onSearch }: SearchFormProps) {
+  const [destination, setDestination] = useState("");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [guests, setGuests] = useState(2);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    onSearch({ destination, checkIn, checkOut, guests });
   };
 
   return (
@@ -20,24 +31,44 @@ export default function SearchForm() {
         <input
           className={inputClassName}
           name="destination"
+          onChange={(event) => setDestination(event.target.value)}
           placeholder="例: 東京、新宿"
           type="text"
+          value={destination}
         />
       </label>
 
       <label className="grid gap-2 text-sm font-semibold text-slate-700">
         チェックイン日
-        <input className={inputClassName} name="checkIn" type="date" />
+        <input
+          className={inputClassName}
+          name="checkIn"
+          onChange={(event) => setCheckIn(event.target.value)}
+          type="date"
+          value={checkIn}
+        />
       </label>
 
       <label className="grid gap-2 text-sm font-semibold text-slate-700">
         チェックアウト日
-        <input className={inputClassName} name="checkOut" type="date" />
+        <input
+          className={inputClassName}
+          min={checkIn || undefined}
+          name="checkOut"
+          onChange={(event) => setCheckOut(event.target.value)}
+          type="date"
+          value={checkOut}
+        />
       </label>
 
       <label className="grid gap-2 text-sm font-semibold text-slate-700">
         人数
-        <select className={inputClassName} defaultValue="2" name="guests">
+        <select
+          className={inputClassName}
+          name="guests"
+          onChange={(event) => setGuests(Number(event.target.value))}
+          value={guests}
+        >
           <option value="1">1名</option>
           <option value="2">2名</option>
           <option value="3">3名</option>

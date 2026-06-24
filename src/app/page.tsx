@@ -1,8 +1,32 @@
+"use client";
+
 import HotelCard from "@/components/HotelCard";
 import SearchForm from "@/components/SearchForm";
 import { hotels } from "@/data/hotels";
+import type { SearchCondition } from "@/types/search";
+import { useState } from "react";
+
+const initialSearchCondition: SearchCondition = {
+  destination: "",
+  checkIn: "",
+  checkOut: "",
+  guests: 2,
+};
 
 export default function Home() {
+  const [searchCondition, setSearchCondition] = useState<SearchCondition>(
+    initialSearchCondition,
+  );
+  const destination = searchCondition.destination.trim().toLowerCase();
+  const filteredHotels = hotels.filter((hotel) => {
+    if (!destination) return true;
+
+    return (
+      hotel.name.toLowerCase().includes(destination) ||
+      hotel.area.toLowerCase().includes(destination)
+    );
+  });
+
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-6 sm:py-14">
       <div className="mx-auto max-w-6xl">
@@ -18,7 +42,7 @@ export default function Home() {
           </p>
         </header>
 
-        <SearchForm />
+        <SearchForm onSearch={setSearchCondition} />
 
         <section className="mt-12" aria-labelledby="hotel-list-heading">
           <div className="mb-6 flex items-end justify-between gap-4">
@@ -31,14 +55,33 @@ export default function Home() {
                 ホテルを比較する
               </h2>
             </div>
-            <p className="text-sm text-slate-500">{hotels.length}件のホテル</p>
+            <p
+              aria-live="polite"
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200"
+            >
+              {filteredHotels.length}件のホテル
+            </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {hotels.map((hotel) => (
-              <HotelCard hotel={hotel} key={hotel.id} />
-            ))}
-          </div>
+          {filteredHotels.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {filteredHotels.map((hotel) => (
+                <HotelCard hotel={hotel} key={hotel.id} />
+              ))}
+            </div>
+          ) : (
+            <div
+              className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm"
+              role="status"
+            >
+              <p className="text-lg font-bold text-slate-800">
+                条件に一致するホテルが見つかりませんでした
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                目的地を変更して、もう一度検索してください。
+              </p>
+            </div>
+          )}
         </section>
       </div>
     </main>
