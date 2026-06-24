@@ -2,9 +2,10 @@
 
 import HotelCard from "@/components/HotelCard";
 import SearchForm from "@/components/SearchForm";
-import { hotels } from "@/data/hotels";
+import { fetchHotels } from "@/lib/hotelApi";
+import type { Hotel } from "@/types/hotel";
 import type { SearchCondition } from "@/types/search";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const initialSearchCondition: SearchCondition = {
   destination: "",
@@ -17,7 +18,7 @@ const initialSearchCondition: SearchCondition = {
   breakfastOnly: false,
 };
 
-const getLowestPrice = (hotel: (typeof hotels)[number]) =>
+const getLowestPrice = (hotel: Hotel) =>
   hotel.offers.reduce<number | undefined>(
     (lowest, offer) =>
       lowest === undefined || offer.price < lowest ? offer.price : lowest,
@@ -25,9 +26,32 @@ const getLowestPrice = (hotel: (typeof hotels)[number]) =>
   );
 
 export default function Home() {
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     initialSearchCondition,
   );
+
+  useEffect(() => {
+    let isActive = true;
+
+    fetchHotels()
+      .then((data) => {
+        if (isActive) setHotels(data);
+      })
+      .catch(() => {
+        if (isActive) setErrorMessage("ホテル情報の取得に失敗しました");
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const destination = searchCondition.destination.trim().toLocaleLowerCase("ja");
   const filteredHotels = hotels
     .filter((hotel) => {
@@ -109,7 +133,26 @@ export default function Home() {
             </p>
           </div>
 
-          {filteredHotels.length > 0 ? (
+          {isLoading ? (
+            <div
+              className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm"
+              role="status"
+            >
+              <p className="text-lg font-bold text-slate-800">
+                ホテル情報を読み込んでいます…
+              </p>
+            </div>
+          ) : errorMessage ? (
+            <div
+              className="rounded-2xl border border-rose-200 bg-rose-50 px-6 py-16 text-center shadow-sm"
+              role="alert"
+            >
+              <p className="text-lg font-bold text-rose-800">{errorMessage}</p>
+              <p className="mt-2 text-sm text-rose-600">
+                時間をおいて、もう一度お試しください。
+              </p>
+            </div>
+          ) : filteredHotels.length > 0 ? (
             <div className="grid items-start gap-6 lg:grid-cols-2">
               {filteredHotels.map((hotel) => (
                 <HotelCard hotel={hotel} key={hotel.id} />

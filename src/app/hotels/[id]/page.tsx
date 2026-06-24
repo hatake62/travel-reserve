@@ -1,6 +1,9 @@
-import { hotels } from "@/data/hotels";
+"use client";
+
+import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
+import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { use, useEffect, useState } from "react";
 
 type HotelDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -12,18 +15,44 @@ const yenFormatter = new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 0,
 });
 
-export function generateStaticParams() {
-  return hotels.map((hotel) => ({ id: String(hotel.id) }));
-}
-
-export default async function HotelDetailPage({
+export default function HotelDetailPage({
   params,
 }: HotelDetailPageProps) {
-  const { id } = await params;
-  const hotel = hotels.find((item) => String(item.id) === id);
+  const { id } = use(params);
+  const [hotel, setHotel] = useState<Hotel | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!hotel) {
-    notFound();
+  useEffect(() => {
+    let isActive = true;
+
+    fetchHotelById(id)
+      .then((data) => {
+        if (isActive) setHotel(data);
+      })
+      .catch((error: unknown) => {
+        if (!isActive) return;
+        setErrorMessage(
+          error instanceof HotelApiError && error.status === 404
+            ? "ホテルが見つかりませんでした"
+            : "ホテル情報の取得に失敗しました",
+        );
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
+
+  if (isLoading) {
+    return <StatusMessage message="ホテル情報を読み込んでいます…" />;
+  }
+
+  if (errorMessage || !hotel) {
+    return <StatusMessage isError message={errorMessage ?? "ホテルが見つかりませんでした"} />;
   }
 
   const sortedOffers = [...hotel.offers].sort((a, b) => a.price - b.price);
@@ -146,6 +175,30 @@ export default async function HotelDetailPage({
             </section>
           </div>
         </article>
+      </div>
+    </main>
+  );
+}
+
+function StatusMessage({
+  message,
+  isError = false,
+}: {
+  message: string;
+  isError?: boolean;
+}) {
+  return (
+    <main className="min-h-screen bg-slate-50 px-5 py-16 text-slate-900">
+      <div
+        className={`mx-auto max-w-xl rounded-2xl border bg-white px-6 py-16 text-center shadow-sm ${
+          isError ? "border-rose-200" : "border-slate-200"
+        }`}
+        role={isError ? "alert" : "status"}
+      >
+        <p className="text-lg font-bold text-slate-800">{message}</p>
+        <Link className="mt-5 inline-block font-bold text-sky-700" href="/">
+          ホテル一覧へ戻る
+        </Link>
       </div>
     </main>
   );
