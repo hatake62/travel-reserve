@@ -50,6 +50,7 @@ export default function Home() {
         checkIn: condition.checkIn,
         checkOut: condition.checkOut,
         guests: condition.guests,
+        areaCandidate: condition.areaCandidate,
         onNotice: (message) => {
           if (requestId === requestIdRef.current) setNoticeMessage(message);
         },
@@ -92,7 +93,11 @@ export default function Home() {
     };
   }, []);
 
-  const destination = searchCondition.destination.trim().toLocaleLowerCase("ja");
+  // 地区コード検索はサーバー側で絞り込み済み。displayName（階層表記）を
+  // ホテル住所へ再度部分一致させると、正しい結果まで除外してしまう。
+  const destination = searchCondition.areaCandidate
+    ? ""
+    : searchCondition.destination.trim().toLocaleLowerCase("ja");
   const filteredHotels = hotels
     .filter((hotel) => {
       const matchesDestination =

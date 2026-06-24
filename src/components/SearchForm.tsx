@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { validateHotelSearch } from "@/lib/searchValidation";
+import type { RakutenAreaCandidate } from "@/types/rakutenArea";
 import type { BookingSite, SearchCondition, SortBy } from "@/types/search";
 
 type SearchFormProps = {
@@ -22,6 +23,45 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
   const [site, setSite] = useState<BookingSite>("");
   const [breakfastOnly, setBreakfastOnly] = useState(false);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [areaCandidate, setAreaCandidate] = useState<RakutenAreaCandidate>();
+  const [areaCandidates, setAreaCandidates] = useState<RakutenAreaCandidate[]>([]);
+  const [isLoadingAreas, setIsLoadingAreas] = useState(false);
+  const [areaError, setAreaError] = useState<string | null>(null);
+
+  const handleFindAreas = async () => {
+    if (!destination.trim()) {
+      setAreaCandidates([]);
+      setAreaError("目的地を入力してください。");
+      return;
+    }
+
+    setIsLoadingAreas(true);
+    setAreaError(null);
+    try {
+      const response = await fetch(
+        `/api/areas?keyword=${encodeURIComponent(destination.trim())}`,
+      );
+      const data = (await response.json()) as
+        | RakutenAreaCandidate[]
+        | { error?: string };
+      if (!response.ok || !Array.isArray(data)) {
+        throw new Error(
+          !Array.isArray(data) && data.error
+            ? data.error
+            : "地区候補の取得に失敗しました。",
+        );
+      }
+      setAreaCandidates(data.slice(0, 5));
+      if (data.length === 0) setAreaError("一致する地区候補がありません。");
+    } catch (error) {
+      setAreaCandidates([]);
+      setAreaError(
+        error instanceof Error ? error.message : "地区候補の取得に失敗しました。",
+      );
+    } finally {
+      setIsLoadingAreas(false);
+    }
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,6 +80,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
       maxPrice: maxPrice === "" ? null : Number(maxPrice),
       site,
       breakfastOnly,
+      areaCandidate,
     });
   };
 
@@ -50,17 +91,51 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
       onSubmit={handleSubmit}
     >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <label className="grid gap-2 text-sm font-semibold text-slate-700 lg:col-span-2">
+        <div className="grid gap-2 text-sm font-semibold text-slate-700 lg:col-span-2">
           目的地
           <input
             className={inputClassName}
             name="destination"
-            onChange={(event) => setDestination(event.target.value)}
+            onChange={(event) => {
+              setDestination(event.target.value);
+              setAreaCandidate(undefined);
+              setAreaCandidates([]);
+              setAreaError(null);
+            }}
             placeholder="例: 東京、新宿"
             type="text"
             value={destination}
           />
-        </label>
+          <button
+            className="w-fit rounded-md border border-sky-700 px-3 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 disabled:cursor-wait disabled:border-slate-300 disabled:text-slate-400"
+            disabled={isLoadingAreas}
+            onClick={handleFindAreas}
+            type="button"
+          >
+            {isLoadingAreas ? "地区候補を取得中..." : "地区候補を確認"}
+          </button>
+          {areaError && <p className="text-xs text-rose-700" role="alert">{areaError}</p>}
+          {areaCandidates.length > 0 && (
+            <ul className="grid gap-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
+              {areaCandidates.map((candidate) => (
+                <li key={`${candidate.areaClassCode}-${candidate.middleClassCode}-${candidate.smallClassCode}-${candidate.detailClassCode}`}>
+                  <button
+                    className="w-full rounded-md px-2 py-2 text-left text-xs font-medium text-slate-700 hover:bg-white hover:text-sky-800"
+                    onClick={() => {
+                      setDestination(candidate.displayName);
+                      setAreaCandidate(candidate);
+                      setAreaCandidates([]);
+                      setAreaError(null);
+                    }}
+                    type="button"
+                  >
+                    {candidate.displayName}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
           チェックイン日

@@ -200,8 +200,11 @@ export async function getRakutenHotelsByKeyword({
 }
 
 function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
+  const area = params.areaCandidate;
   const hasAreaCode = Boolean(
-    params.largeClassCode && params.middleClassCode && params.smallClassCode,
+    (area?.areaClassCode ?? params.areaClassCode ?? params.largeClassCode) &&
+      (area?.middleClassCode ?? params.middleClassCode) &&
+      (area?.smallClassCode ?? params.smallClassCode),
   );
   const hasCoordinates =
     Number.isFinite(params.latitude) && Number.isFinite(params.longitude);
@@ -226,6 +229,7 @@ export async function getRakutenVacantHotels(
 
   const credentials = getCredentials();
   const params = createSearchParams(credentials);
+  const area = options.areaCandidate;
   params.set("checkinDate", checkIn);
   params.set("checkoutDate", checkOut);
   params.set("adultNum", String(guests));
@@ -233,10 +237,15 @@ export async function getRakutenVacantHotels(
   params.set("page", "1");
 
   if (options.hotelNo) params.set("hotelNo", String(options.hotelNo));
-  if (options.largeClassCode) params.set("largeClassCode", options.largeClassCode);
-  if (options.middleClassCode) params.set("middleClassCode", options.middleClassCode);
-  if (options.smallClassCode) params.set("smallClassCode", options.smallClassCode);
-  if (options.detailClassCode) params.set("detailClassCode", options.detailClassCode);
+  const largeClassCode =
+    area?.areaClassCode ?? options.areaClassCode ?? options.largeClassCode;
+  const middleClassCode = area?.middleClassCode ?? options.middleClassCode;
+  const smallClassCode = area?.smallClassCode ?? options.smallClassCode;
+  const detailClassCode = area?.detailClassCode ?? options.detailClassCode;
+  if (largeClassCode) params.set("largeClassCode", largeClassCode);
+  if (middleClassCode) params.set("middleClassCode", middleClassCode);
+  if (smallClassCode) params.set("smallClassCode", smallClassCode);
+  if (detailClassCode) params.set("detailClassCode", detailClassCode);
   if (options.latitude !== undefined) params.set("latitude", String(options.latitude));
   if (options.longitude !== undefined) params.set("longitude", String(options.longitude));
   if (options.searchRadius !== undefined) {

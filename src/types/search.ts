@@ -16,6 +16,7 @@ export type SearchCondition = {
   maxPrice: number | null;
   site: BookingSite;
   breakfastOnly: boolean;
+  areaCandidate?: RakutenAreaCandidate;
 };
 
 export type HotelSearchParams = {
@@ -23,4 +24,10 @@ export type HotelSearchParams = {
   checkIn?: string;
   checkOut?: string;
   guests?: number;
+  areaCandidate?: RakutenAreaCandidate;
+  areaClassCode?: string;
+  middleClassCode?: string;
+  smallClassCode?: string;
+  detailClassCode?: string;
 };
+import type { RakutenAreaCandidate } from "@/types/rakutenArea";

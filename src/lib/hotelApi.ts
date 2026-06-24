@@ -45,6 +45,11 @@ export async function fetchHotels({
   checkIn,
   checkOut,
   guests,
+  areaCandidate,
+  areaClassCode,
+  middleClassCode,
+  smallClassCode,
+  detailClassCode,
   signal,
   onNotice,
 }: FetchHotelsOptions = {}): Promise<Hotel[]> {
@@ -54,6 +59,14 @@ export async function fetchHotels({
     if (checkIn) params.set("checkIn", checkIn);
     if (checkOut) params.set("checkOut", checkOut);
     if (guests !== undefined) params.set("guests", String(guests));
+    const resolvedAreaClassCode = areaCandidate?.areaClassCode ?? areaClassCode;
+    const resolvedMiddleClassCode = areaCandidate?.middleClassCode ?? middleClassCode;
+    const resolvedSmallClassCode = areaCandidate?.smallClassCode ?? smallClassCode;
+    const resolvedDetailClassCode = areaCandidate?.detailClassCode ?? detailClassCode;
+    if (resolvedAreaClassCode) params.set("areaClassCode", resolvedAreaClassCode);
+    if (resolvedMiddleClassCode) params.set("middleClassCode", resolvedMiddleClassCode);
+    if (resolvedSmallClassCode) params.set("smallClassCode", resolvedSmallClassCode);
+    if (resolvedDetailClassCode) params.set("detailClassCode", resolvedDetailClassCode);
     const query = params.size > 0 ? `?${params.toString()}` : "";
     const response = await fetch(`${HOTELS_API_PATH}${query}`, {
       headers: { Accept: "application/json" },
@@ -72,7 +85,17 @@ export async function fetchHotels({
   }
 
   const { getHotelProvider } = await import("@/lib/hotelProviders");
-  return getHotelProvider().getHotels({ keyword, checkIn, checkOut, guests });
+  return getHotelProvider().getHotels({
+    keyword,
+    checkIn,
+    checkOut,
+    guests,
+    areaCandidate,
+    areaClassCode,
+    middleClassCode,
+    smallClassCode,
+    detailClassCode,
+  });
 }
 
 export async function fetchHotelById(

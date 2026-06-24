@@ -10,6 +10,10 @@ export async function GET(request: Request) {
     const checkOut = params.get("checkOut") ?? undefined;
     const guestsValue = params.get("guests");
     const guests = guestsValue === null ? undefined : Number(guestsValue);
+    const areaClassCode = params.get("areaClassCode") ?? undefined;
+    const middleClassCode = params.get("middleClassCode") ?? undefined;
+    const smallClassCode = params.get("smallClassCode") ?? undefined;
+    const detailClassCode = params.get("detailClassCode") ?? undefined;
     const hasStayCondition =
       checkIn !== undefined || checkOut !== undefined || guests !== undefined;
 
@@ -21,9 +25,25 @@ export async function GET(request: Request) {
     }
 
     const response = NextResponse.json(
-      await fetchHotels({ keyword, checkIn, checkOut, guests }),
+      await fetchHotels({
+        keyword,
+        checkIn,
+        checkOut,
+        guests,
+        areaClassCode,
+        middleClassCode,
+        smallClassCode,
+        detailClassCode,
+      }),
     );
-    if (hasStayCondition && process.env.USE_MOCK_HOTELS === "false") {
+    const hasAreaCode = Boolean(
+      areaClassCode && middleClassCode && smallClassCode,
+    );
+    if (
+      hasStayCondition &&
+      !hasAreaCode &&
+      process.env.USE_MOCK_HOTELS === "false"
+    ) {
       response.headers.set(
         "X-Hotel-Search-Notice",
         encodeURIComponent("現在はキーワード検索結果を表示しています"),
