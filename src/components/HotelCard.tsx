@@ -1,4 +1,5 @@
 import type { Hotel } from "@/types/hotel";
+import Link from "next/link";
 
 type HotelCardProps = {
   hotel: Hotel;
@@ -45,6 +46,13 @@ export default function HotelCard({ hotel }: HotelCardProps) {
             )}
           </p>
         </div>
+
+        <Link
+          className="mb-5 inline-flex w-full items-center justify-center rounded-xl border border-sky-700 px-4 py-3 text-sm font-bold text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          href={`/hotels/${hotel.id}`}
+        >
+          詳細を見る
+        </Link>
 
         <div className="mt-auto">
           <h3 className="mb-3 text-sm font-bold text-slate-800">予約サイト料金比較</h3>
