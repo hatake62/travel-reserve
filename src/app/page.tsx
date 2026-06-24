@@ -3,21 +3,23 @@
 import HotelCard from "@/components/HotelCard";
 import SearchForm from "@/components/SearchForm";
 import { fetchHotels } from "@/lib/hotelApi";
+import {
+  DEFAULT_SEARCH_CONDITION,
+  searchConditionToParams,
+  searchParamsToCondition,
+} from "@/lib/searchParams";
 import type { Hotel } from "@/types/hotel";
 import type { SearchCondition } from "@/types/search";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-
-const initialSearchCondition: SearchCondition = {
-  destination: "",
-  checkIn: "",
-  checkOut: "",
-  guests: 2,
-  sortBy: "recommended",
-  maxPrice: null,
-  site: "",
-  breakfastOnly: false,
-};
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 const getLowestPrice = (hotel: Hotel) =>
   hotel.offers.reduce<number | undefined>(
@@ -29,16 +31,33 @@ const getLowestPrice = (hotel: Hotel) =>
   );
 
 export default function Home() {
+  return (
+    <Suspense fallback={<HomeLoading />}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const serializedSearchParams = searchParams.toString();
+  const urlCondition = useMemo(
+    () => searchParamsToCondition(new URLSearchParams(serializedSearchParams)),
+    [serializedSearchParams],
+  );
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
-    initialSearchCondition,
+    urlCondition,
   );
   const requestIdRef = useRef(0);
+  const pendingSearchRef = useRef<SearchCondition | null>(null);
 
-  const loadHotels = async (condition: SearchCondition) => {
+  const loadHotels = useCallback(async (condition: SearchCondition) => {
     const requestId = ++requestIdRef.current;
     setSearchCondition(condition);
     setIsLoading(true);
@@ -68,31 +87,40 @@ export default function Home() {
     } finally {
       if (requestId === requestIdRef.current) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let isActive = true;
-    const requestId = ++requestIdRef.current;
+    const pendingCondition = pendingSearchRef.current;
+    const condition =
+      pendingCondition &&
+      searchConditionToParams(pendingCondition).toString() ===
+        serializedSearchParams
+        ? pendingCondition
+        : urlCondition;
+    pendingSearchRef.current = null;
+    void Promise.resolve().then(() => loadHotels(condition));
+  }, [loadHotels, serializedSearchParams, urlCondition]);
 
-    fetchHotels()
-      .then((data) => {
-        if (isActive && requestId === requestIdRef.current) setHotels(data);
-      })
-      .catch(() => {
-        if (isActive && requestId === requestIdRef.current) {
-          setErrorMessage(
-            "ホテル情報の取得に失敗しました。APIキーや通信状況を確認してください。",
-          );
-        }
-      })
-      .finally(() => {
-        if (isActive && requestId === requestIdRef.current) setIsLoading(false);
-      });
+  const handleSearch = (condition: SearchCondition) => {
+    const params = searchConditionToParams(condition);
+    const nextQuery = params.toString();
 
-    return () => {
-      isActive = false;
-    };
-  }, []);
+    if (nextQuery === serializedSearchParams) {
+      void loadHotels(condition);
+      return;
+    }
+
+    pendingSearchRef.current = condition;
+    router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  };
+
+  const handleReset = () => {
+    if (!serializedSearchParams) {
+      void loadHotels(DEFAULT_SEARCH_CONDITION);
+      return;
+    }
+    router.replace(pathname);
+  };
 
   // 地区コード検索はサーバー側で絞り込み済み。displayName（階層表記）を
   // ホテル住所へ再度部分一致させると、正しい結果まで除外してしまう。
@@ -164,7 +192,13 @@ export default function Home() {
           </Link>
         </header>
 
-        <SearchForm isLoading={isLoading} onSearch={loadHotels} />
+        <SearchForm
+          initialCondition={urlCondition}
+          isLoading={isLoading}
+          key={serializedSearchParams}
+          onReset={handleReset}
+          onSearch={handleSearch}
+        />
 
         {noticeMessage && (
           <p
@@ -233,6 +267,19 @@ export default function Home() {
             </div>
           )}
         </section>
+      </div>
+    </main>
+  );
+}
+
+function HomeLoading() {
+  return (
+    <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-6 sm:py-14">
+      <div
+        className="mx-auto max-w-6xl rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm"
+        role="status"
+      >
+        <p className="text-lg font-bold text-slate-800">読み込み中...</p>
       </div>
     </main>
   );

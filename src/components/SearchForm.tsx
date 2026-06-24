@@ -1,32 +1,58 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { DEFAULT_SEARCH_CONDITION } from "@/lib/searchParams";
 import { validateHotelSearch } from "@/lib/searchValidation";
 import type { RakutenAreaCandidate } from "@/types/rakutenArea";
 import type { BookingSite, SearchCondition, SortBy } from "@/types/search";
 
 type SearchFormProps = {
   onSearch: (condition: SearchCondition) => void;
+  onReset: () => void;
+  initialCondition: SearchCondition;
   isLoading?: boolean;
 };
 
 const inputClassName =
   "h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-4 focus:ring-sky-100";
 
-export default function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
-  const [destination, setDestination] = useState("");
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [guests, setGuests] = useState(2);
-  const [sortBy, setSortBy] = useState<SortBy>("recommended");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [site, setSite] = useState<BookingSite>("");
-  const [breakfastOnly, setBreakfastOnly] = useState(false);
+export default function SearchForm({
+  onSearch,
+  onReset,
+  initialCondition,
+  isLoading = false,
+}: SearchFormProps) {
+  const [destination, setDestination] = useState(initialCondition.destination);
+  const [checkIn, setCheckIn] = useState(initialCondition.checkIn);
+  const [checkOut, setCheckOut] = useState(initialCondition.checkOut);
+  const [guests, setGuests] = useState(initialCondition.guests);
+  const [sortBy, setSortBy] = useState<SortBy>(initialCondition.sortBy);
+  const [maxPrice, setMaxPrice] = useState(
+    initialCondition.maxPrice === null ? "" : String(initialCondition.maxPrice),
+  );
+  const [site, setSite] = useState<BookingSite>(initialCondition.site);
+  const [breakfastOnly, setBreakfastOnly] = useState(initialCondition.breakfastOnly);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [rakutenAreaCandidate, setRakutenAreaCandidate] = useState<RakutenAreaCandidate>();
   const [areaCandidates, setAreaCandidates] = useState<RakutenAreaCandidate[]>([]);
   const [isLoadingAreas, setIsLoadingAreas] = useState(false);
   const [areaError, setAreaError] = useState<string | null>(null);
+
+  const handleReset = () => {
+    setDestination(DEFAULT_SEARCH_CONDITION.destination);
+    setCheckIn(DEFAULT_SEARCH_CONDITION.checkIn);
+    setCheckOut(DEFAULT_SEARCH_CONDITION.checkOut);
+    setGuests(DEFAULT_SEARCH_CONDITION.guests);
+    setSortBy(DEFAULT_SEARCH_CONDITION.sortBy);
+    setMaxPrice("");
+    setSite(DEFAULT_SEARCH_CONDITION.site);
+    setBreakfastOnly(DEFAULT_SEARCH_CONDITION.breakfastOnly);
+    setRakutenAreaCandidate(undefined);
+    setAreaCandidates([]);
+    setAreaError(null);
+    setValidationMessage(null);
+    onReset();
+  };
 
   const handleFindAreas = async () => {
     if (!destination.trim()) {
@@ -242,13 +268,23 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
           朝食ありのプランがあるホテルのみ
         </label>
 
-        <button
-          className="h-12 rounded-lg bg-sky-700 px-9 text-base font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-wait disabled:bg-slate-400"
-          disabled={isLoading}
-          type="submit"
-        >
-          {isLoading ? "検索中..." : "この条件で検索"}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            className="h-12 rounded-lg border border-slate-300 bg-white px-6 text-base font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:cursor-wait disabled:text-slate-400"
+            disabled={isLoading}
+            onClick={handleReset}
+            type="button"
+          >
+            条件をリセット
+          </button>
+          <button
+            className="h-12 rounded-lg bg-sky-700 px-9 text-base font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-wait disabled:bg-slate-400"
+            disabled={isLoading}
+            type="submit"
+          >
+            {isLoading ? "検索中..." : "この条件で検索"}
+          </button>
+        </div>
       </div>
       {validationMessage && (
         <p className="mt-4 text-sm font-semibold text-rose-700" role="alert">

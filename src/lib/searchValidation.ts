@@ -13,6 +13,10 @@ export function validateHotelSearch({
   checkOut,
   guests,
 }: HotelSearchParams): string | null {
+  if (!Number.isInteger(guests) || (guests ?? 0) < 1) {
+    return "人数は1名以上にしてください";
+  }
+  if (!checkIn && !checkOut) return null;
   if (!checkIn) return "チェックイン日を入力してください";
   if (!checkOut) return "チェックアウト日を入力してください";
   if (!isValidDate(checkIn) || !isValidDate(checkOut)) {
@@ -20,9 +24,6 @@ export function validateHotelSearch({
   }
   if (checkOut <= checkIn) {
     return "チェックアウト日はチェックイン日より後にしてください";
-  }
-  if (!Number.isInteger(guests) || (guests ?? 0) < 1) {
-    return "人数は1名以上にしてください";
   }
   return null;
 }
