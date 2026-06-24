@@ -7,6 +7,11 @@ type ApiErrorResponse = {
   message?: string;
 };
 
+export type FetchHotelsOptions = {
+  keyword?: string;
+  signal?: AbortSignal;
+};
+
 export class HotelApiError extends Error {
   constructor(
     message: string,
@@ -17,8 +22,11 @@ export class HotelApiError extends Error {
   }
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { Accept: "application/json" } });
+async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, {
+    headers: { Accept: "application/json" },
+    signal,
+  });
 
   if (!response.ok) {
     const error = (await response.json().catch(() => ({}))) as ApiErrorResponse;
@@ -31,13 +39,19 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function fetchHotels(): Promise<Hotel[]> {
+export async function fetchHotels({
+  keyword,
+  signal,
+}: FetchHotelsOptions = {}): Promise<Hotel[]> {
   if (typeof window !== "undefined") {
-    return fetchJson<Hotel[]>(HOTELS_API_PATH);
+    const params = new URLSearchParams();
+    if (keyword?.trim()) params.set("keyword", keyword.trim());
+    const query = params.size > 0 ? `?${params.toString()}` : "";
+    return fetchJson<Hotel[]>(`${HOTELS_API_PATH}${query}`, signal);
   }
 
   const { getHotelProvider } = await import("@/lib/hotelProviders");
-  return getHotelProvider().getHotels();
+  return getHotelProvider().getHotels({ keyword });
 }
 
 export async function fetchHotelById(

@@ -6,8 +6,12 @@ import {
 } from "./rakutenProvider";
 
 export type HotelProvider = {
-  getHotels: () => Promise<Hotel[]>;
+  getHotels: (options?: HotelSearchOptions) => Promise<Hotel[]>;
   getHotelById: (id: string | number) => Promise<Hotel | undefined>;
+};
+
+export type HotelSearchOptions = {
+  keyword?: string;
 };
 
 const mockProvider: HotelProvider = {

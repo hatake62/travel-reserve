@@ -1,9 +1,10 @@
 import { fetchHotels } from "@/lib/hotelApi";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    return NextResponse.json(await fetchHotels());
+    const keyword = new URL(request.url).searchParams.get("keyword") ?? undefined;
+    return NextResponse.json(await fetchHotels({ keyword }));
   } catch (error) {
     console.error("Failed to fetch hotels:", error);
     return NextResponse.json(

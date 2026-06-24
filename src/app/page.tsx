@@ -5,7 +5,7 @@ import SearchForm from "@/components/SearchForm";
 import { fetchHotels } from "@/lib/hotelApi";
 import type { Hotel } from "@/types/hotel";
 import type { SearchCondition } from "@/types/search";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const initialSearchCondition: SearchCondition = {
   destination: "",
@@ -21,7 +21,9 @@ const initialSearchCondition: SearchCondition = {
 const getLowestPrice = (hotel: Hotel) =>
   hotel.offers.reduce<number | undefined>(
     (lowest, offer) =>
-      lowest === undefined || offer.price < lowest ? offer.price : lowest,
+      offer.price > 0 && (lowest === undefined || offer.price < lowest)
+        ? offer.price
+        : lowest,
     undefined,
   );
 
@@ -32,19 +34,45 @@ export default function Home() {
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     initialSearchCondition,
   );
+  const requestIdRef = useRef(0);
+
+  const loadHotels = async (condition: SearchCondition) => {
+    const requestId = ++requestIdRef.current;
+    setSearchCondition(condition);
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const data = await fetchHotels({ keyword: condition.destination });
+      if (requestId === requestIdRef.current) setHotels(data);
+    } catch {
+      if (requestId === requestIdRef.current) {
+        setErrorMessage(
+          "ホテル情報の取得に失敗しました。APIキーや通信状況を確認してください。",
+        );
+      }
+    } finally {
+      if (requestId === requestIdRef.current) setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     let isActive = true;
+    const requestId = ++requestIdRef.current;
 
     fetchHotels()
       .then((data) => {
-        if (isActive) setHotels(data);
+        if (isActive && requestId === requestIdRef.current) setHotels(data);
       })
       .catch(() => {
-        if (isActive) setErrorMessage("ホテル情報の取得に失敗しました");
+        if (isActive && requestId === requestIdRef.current) {
+          setErrorMessage(
+            "ホテル情報の取得に失敗しました。APIキーや通信状況を確認してください。",
+          );
+        }
       })
       .finally(() => {
-        if (isActive) setIsLoading(false);
+        if (isActive && requestId === requestIdRef.current) setIsLoading(false);
       });
 
     return () => {
@@ -112,7 +140,7 @@ export default function Home() {
           </p>
         </header>
 
-        <SearchForm onSearch={setSearchCondition} />
+        <SearchForm isLoading={isLoading} onSearch={loadHotels} />
 
         <section className="mt-12" aria-labelledby="hotel-list-heading">
           <div className="mb-6 flex items-end justify-between gap-4">
@@ -139,7 +167,7 @@ export default function Home() {
               role="status"
             >
               <p className="text-lg font-bold text-slate-800">
-                ホテル情報を読み込んでいます…
+                検索中...
               </p>
             </div>
           ) : errorMessage ? (

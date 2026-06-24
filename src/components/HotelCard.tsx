@@ -12,8 +12,12 @@ const yenFormatter = new Intl.NumberFormat("ja-JP", {
 });
 
 export default function HotelCard({ hotel }: HotelCardProps) {
-  const sortedOffers = [...hotel.offers].sort((a, b) => a.price - b.price);
-  const lowestPrice = sortedOffers[0]?.price;
+  const sortedOffers = [...hotel.offers].sort((a, b) => {
+    if (a.price <= 0) return b.price <= 0 ? 0 : 1;
+    if (b.price <= 0) return -1;
+    return a.price - b.price;
+  });
+  const lowestPrice = sortedOffers.find((offer) => offer.price > 0)?.price;
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-lg">
@@ -79,7 +83,7 @@ export default function HotelCard({ hotel }: HotelCardProps) {
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-lg font-bold text-slate-950">
-                        {yenFormatter.format(offer.price)}
+                        {offer.price > 0 ? yenFormatter.format(offer.price) : "価格不明"}
                       </p>
                       <a
                         aria-label={`${offer.site}で${hotel.name}を予約する`}

@@ -55,8 +55,12 @@ export default function HotelDetailPage({
     return <StatusMessage isError message={errorMessage ?? "ホテルが見つかりませんでした"} />;
   }
 
-  const sortedOffers = [...hotel.offers].sort((a, b) => a.price - b.price);
-  const lowestOffer = sortedOffers[0];
+  const sortedOffers = [...hotel.offers].sort((a, b) => {
+    if (a.price <= 0) return b.price <= 0 ? 0 : 1;
+    if (b.price <= 0) return -1;
+    return a.price - b.price;
+  });
+  const lowestOffer = sortedOffers.find((offer) => offer.price > 0);
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 text-slate-900 sm:px-6 sm:py-12">
@@ -147,7 +151,7 @@ export default function HotelDetailPage({
                               )}
                             </div>
                           </th>
-                          <td className="whitespace-nowrap px-5 py-5 text-lg font-bold text-slate-950">{yenFormatter.format(offer.price)}</td>
+                          <td className="whitespace-nowrap px-5 py-5 text-lg font-bold text-slate-950">{offer.price > 0 ? yenFormatter.format(offer.price) : "価格不明"}</td>
                           <td className="px-5 py-5 text-slate-700">{offer.roomType}</td>
                           <td className="whitespace-nowrap px-5 py-5 text-slate-700">{offer.hasBreakfast ? "朝食あり" : "朝食なし"}</td>
                           <td className="px-5 py-5 text-slate-700">{offer.cancellation}</td>

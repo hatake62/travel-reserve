@@ -5,12 +5,13 @@ import type { BookingSite, SearchCondition, SortBy } from "@/types/search";
 
 type SearchFormProps = {
   onSearch: (condition: SearchCondition) => void;
+  isLoading?: boolean;
 };
 
 const inputClassName =
   "h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-4 focus:ring-sky-100";
 
-export default function SearchForm({ onSearch }: SearchFormProps) {
+export default function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
   const [destination, setDestination] = useState("");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -151,10 +152,11 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
         </label>
 
         <button
-          className="h-12 rounded-lg bg-sky-700 px-9 text-base font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          className="h-12 rounded-lg bg-sky-700 px-9 text-base font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-wait disabled:bg-slate-400"
+          disabled={isLoading}
           type="submit"
         >
-          この条件で検索
+          {isLoading ? "検索中..." : "この条件で検索"}
         </button>
       </div>
     </form>
