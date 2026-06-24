@@ -3,6 +3,7 @@ import type { Hotel } from "@/types/hotel";
 const HOTELS_API_PATH = "/api/hotels";
 
 type ApiErrorResponse = {
+  error?: string;
   message?: string;
 };
 
@@ -22,7 +23,7 @@ async function fetchJson<T>(path: string): Promise<T> {
   if (!response.ok) {
     const error = (await response.json().catch(() => ({}))) as ApiErrorResponse;
     throw new HotelApiError(
-      error.message ?? "ホテル情報の取得に失敗しました",
+      error.error ?? error.message ?? "ホテル情報の取得に失敗しました",
       response.status,
     );
   }
@@ -30,10 +31,22 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function fetchHotels(): Promise<Hotel[]> {
-  return fetchJson<Hotel[]>(HOTELS_API_PATH);
+export async function fetchHotels(): Promise<Hotel[]> {
+  if (typeof window !== "undefined") {
+    return fetchJson<Hotel[]>(HOTELS_API_PATH);
+  }
+
+  const { getHotelProvider } = await import("@/lib/hotelProviders");
+  return getHotelProvider().getHotels();
 }
 
-export function fetchHotelById(id: string | number): Promise<Hotel> {
-  return fetchJson<Hotel>(`${HOTELS_API_PATH}/${encodeURIComponent(id)}`);
+export async function fetchHotelById(
+  id: string | number,
+): Promise<Hotel | null> {
+  if (typeof window !== "undefined") {
+    return fetchJson<Hotel>(`${HOTELS_API_PATH}/${encodeURIComponent(id)}`);
+  }
+
+  const { getHotelProvider } = await import("@/lib/hotelProviders");
+  return (await getHotelProvider().getHotelById(id)) ?? null;
 }

@@ -1,4 +1,4 @@
-import { hotels } from "@/data/hotels";
+import { fetchHotelById } from "@/lib/hotelApi";
 import { NextResponse } from "next/server";
 
 type HotelRouteContext = {
@@ -6,15 +6,23 @@ type HotelRouteContext = {
 };
 
 export async function GET(_request: Request, { params }: HotelRouteContext) {
-  const { id } = await params;
-  const hotel = hotels.find((item) => String(item.id) === id);
+  try {
+    const { id } = await params;
+    const hotel = await fetchHotelById(id);
 
-  if (!hotel) {
+    if (!hotel) {
+      return NextResponse.json(
+        { error: "ホテルが見つかりませんでした" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json(hotel);
+  } catch (error) {
+    console.error("Failed to fetch hotel:", error);
     return NextResponse.json(
-      { message: "ホテルが見つかりませんでした" },
-      { status: 404 },
+      { error: "ホテル情報の取得に失敗しました" },
+      { status: 500 },
     );
   }
-
-  return NextResponse.json(hotel);
 }
