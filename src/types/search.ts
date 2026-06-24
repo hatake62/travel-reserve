@@ -17,3 +17,10 @@ export type SearchCondition = {
   site: BookingSite;
   breakfastOnly: boolean;
 };
+
+export type HotelSearchParams = {
+  keyword?: string;
+  checkIn?: string;
+  checkOut?: string;
+  guests?: number;
+};

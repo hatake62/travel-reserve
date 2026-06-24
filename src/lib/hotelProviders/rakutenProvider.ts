@@ -1,9 +1,12 @@
 import type { Hotel } from "@/types/hotel";
+import type { HotelSearchParams } from "@/types/search";
 
 const KEYWORD_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/KeywordHotelSearch/20170426";
 const HOTEL_DETAIL_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/HotelDetailSearch/20170426";
+const VACANT_HOTEL_SEARCH_ENDPOINT =
+  "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426";
 const DEFAULT_KEYWORD = "東京";
 
 type RakutenHotelBasicInfo = {
@@ -22,6 +25,15 @@ type RakutenHotelBasicInfo = {
 type RakutenHotelEntry = {
   hotelBasicInfo?: RakutenHotelBasicInfo;
   hotelDetailInfo?: { areaName?: string | null };
+  roomInfo?: Array<{
+    roomBasicInfo?: {
+      roomName?: string | null;
+      planName?: string | null;
+      dailyCharge?: { total?: number | string | null } | null;
+      reserveUrl?: string | null;
+      withBreakfastFlag?: number | string | null;
+    };
+  }>;
 };
 
 type RakutenHotelResponse = {
@@ -79,7 +91,20 @@ function toFiniteNumber(value: number | string | null | undefined): number {
   return typeof number === "number" && Number.isFinite(number) ? number : 0;
 }
 
-function toHotel(entry: RakutenHotelEntry): Hotel | null {
+export type RakutenVacantHotelParams = HotelSearchParams & {
+  hotelNo?: string | number;
+  largeClassCode?: string;
+  middleClassCode?: string;
+  smallClassCode?: string;
+  detailClassCode?: string;
+  latitude?: number;
+  longitude?: number;
+  searchRadius?: number;
+};
+
+export function mapRakutenHotelToHotel(
+  entry: RakutenHotelEntry,
+): Hotel | null {
   const basicInfo = entry.hotelBasicInfo;
   if (!basicInfo?.hotelNo || !basicInfo.hotelName) return null;
 
@@ -107,9 +132,39 @@ function toHotel(entry: RakutenHotelEntry): Hotel | null {
   };
 }
 
+export function mapRakutenVacantHotelToHotel(
+  entry: RakutenHotelEntry,
+): Hotel | null {
+  const hotel = mapRakutenHotelToHotel(entry);
+  if (!hotel) return null;
+
+  const offers: Hotel["offers"] = (entry.roomInfo ?? []).flatMap(
+    ({ roomBasicInfo }) => {
+      if (!roomBasicInfo) return [];
+      return [
+        {
+          site: "楽天トラベル",
+          price: Math.max(0, toFiniteNumber(roomBasicInfo.dailyCharge?.total)),
+          bookingUrl:
+            roomBasicInfo.reserveUrl || hotel.offers[0]?.bookingUrl || "",
+          roomType:
+            [roomBasicInfo.roomName, roomBasicInfo.planName]
+              .filter(Boolean)
+              .join(" / ") || "空室プラン",
+          hasBreakfast: String(roomBasicInfo.withBreakfastFlag) === "1",
+          cancellation: "予約サイトで確認",
+        },
+      ];
+    },
+  );
+
+  return offers.length > 0 ? { ...hotel, offers } : hotel;
+}
+
 async function fetchRakutenHotels(
   endpoint: string,
   params: URLSearchParams,
+  mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenHotelToHotel,
 ): Promise<Hotel[]> {
   const response = await fetch(`${endpoint}?${params.toString()}`, {
     headers: { Accept: "application/json" },
@@ -127,11 +182,11 @@ async function fetchRakutenHotels(
   }
 
   return (data.hotels ?? [])
-    .map(toHotel)
+    .map(mapper)
     .filter((hotel): hotel is Hotel => hotel !== null);
 }
 
-export async function getRakutenHotels({
+export async function getRakutenHotelsByKeyword({
   keyword,
 }: { keyword?: string } = {}): Promise<Hotel[]> {
   const credentials = getCredentials();
@@ -143,6 +198,60 @@ export async function getRakutenHotels({
 
   return fetchRakutenHotels(KEYWORD_SEARCH_ENDPOINT, params);
 }
+
+function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
+  const hasAreaCode = Boolean(
+    params.largeClassCode && params.middleClassCode && params.smallClassCode,
+  );
+  const hasCoordinates =
+    Number.isFinite(params.latitude) && Number.isFinite(params.longitude);
+  return Boolean(params.hotelNo || hasAreaCode || hasCoordinates);
+}
+
+export async function getRakutenVacantHotels(
+  options: RakutenVacantHotelParams = {},
+): Promise<Hotel[]> {
+  const { keyword, checkIn, checkOut, guests } = options;
+
+  if (!checkIn || !checkOut || !guests) {
+    return getRakutenHotelsByKeyword({ keyword });
+  }
+
+  // VacantHotelSearch does not accept a free-text keyword as its location.
+  // TODO: resolve keyword to Rakuten area codes or hotel numbers before this call.
+  // TODO: expose area-code and coordinate selection in the search UI/API contract.
+  if (!hasVacantSearchArea(options)) {
+    return getRakutenHotelsByKeyword({ keyword });
+  }
+
+  const credentials = getCredentials();
+  const params = createSearchParams(credentials);
+  params.set("checkinDate", checkIn);
+  params.set("checkoutDate", checkOut);
+  params.set("adultNum", String(guests));
+  params.set("hits", "10");
+  params.set("page", "1");
+
+  if (options.hotelNo) params.set("hotelNo", String(options.hotelNo));
+  if (options.largeClassCode) params.set("largeClassCode", options.largeClassCode);
+  if (options.middleClassCode) params.set("middleClassCode", options.middleClassCode);
+  if (options.smallClassCode) params.set("smallClassCode", options.smallClassCode);
+  if (options.detailClassCode) params.set("detailClassCode", options.detailClassCode);
+  if (options.latitude !== undefined) params.set("latitude", String(options.latitude));
+  if (options.longitude !== undefined) params.set("longitude", String(options.longitude));
+  if (options.searchRadius !== undefined) {
+    params.set("searchRadius", String(options.searchRadius));
+  }
+
+  return fetchRakutenHotels(
+    VACANT_HOTEL_SEARCH_ENDPOINT,
+    params,
+    mapRakutenVacantHotelToHotel,
+  );
+}
+
+/** @deprecated Use getRakutenHotelsByKeyword or getRakutenVacantHotels. */
+export const getRakutenHotels = getRakutenHotelsByKeyword;
 
 export async function getRakutenHotelById(
   id: string | number,

@@ -31,6 +31,7 @@ export default function Home() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     initialSearchCondition,
   );
@@ -41,14 +42,25 @@ export default function Home() {
     setSearchCondition(condition);
     setIsLoading(true);
     setErrorMessage(null);
+    setNoticeMessage(null);
 
     try {
-      const data = await fetchHotels({ keyword: condition.destination });
+      const data = await fetchHotels({
+        keyword: condition.destination,
+        checkIn: condition.checkIn,
+        checkOut: condition.checkOut,
+        guests: condition.guests,
+        onNotice: (message) => {
+          if (requestId === requestIdRef.current) setNoticeMessage(message);
+        },
+      });
       if (requestId === requestIdRef.current) setHotels(data);
-    } catch {
+    } catch (error) {
       if (requestId === requestIdRef.current) {
         setErrorMessage(
-          "ホテル情報の取得に失敗しました。APIキーや通信状況を確認してください。",
+          error instanceof Error
+            ? error.message
+            : "空室情報の取得に失敗しました",
         );
       }
     } finally {
@@ -141,6 +153,15 @@ export default function Home() {
         </header>
 
         <SearchForm isLoading={isLoading} onSearch={loadHotels} />
+
+        {noticeMessage && (
+          <p
+            className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800"
+            role="status"
+          >
+            {noticeMessage}
+          </p>
+        )}
 
         <section className="mt-12" aria-labelledby="hotel-list-heading">
           <div className="mb-6 flex items-end justify-between gap-4">

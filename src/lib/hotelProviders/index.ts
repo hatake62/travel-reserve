@@ -1,8 +1,9 @@
 import type { Hotel } from "@/types/hotel";
+import type { HotelSearchParams } from "@/types/search";
 import { getMockHotelById, getMockHotels } from "./mockProvider";
 import {
   getRakutenHotelById,
-  getRakutenHotels,
+  getRakutenVacantHotels,
 } from "./rakutenProvider";
 
 export type HotelProvider = {
@@ -10,9 +11,7 @@ export type HotelProvider = {
   getHotelById: (id: string | number) => Promise<Hotel | undefined>;
 };
 
-export type HotelSearchOptions = {
-  keyword?: string;
-};
+export type HotelSearchOptions = HotelSearchParams;
 
 const mockProvider: HotelProvider = {
   getHotels: getMockHotels,
@@ -20,7 +19,7 @@ const mockProvider: HotelProvider = {
 };
 
 const rakutenProvider: HotelProvider = {
-  getHotels: getRakutenHotels,
+  getHotels: getRakutenVacantHotels,
   getHotelById: getRakutenHotelById,
 };
 

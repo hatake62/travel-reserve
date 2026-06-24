@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { validateHotelSearch } from "@/lib/searchValidation";
 import type { BookingSite, SearchCondition, SortBy } from "@/types/search";
 
 type SearchFormProps = {
@@ -20,9 +21,16 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
   const [maxPrice, setMaxPrice] = useState("");
   const [site, setSite] = useState<BookingSite>("");
   const [breakfastOnly, setBreakfastOnly] = useState(false);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const message = validateHotelSearch({ checkIn, checkOut, guests });
+    if (message) {
+      setValidationMessage(message);
+      return;
+    }
+    setValidationMessage(null);
     onSearch({
       destination,
       checkIn,
@@ -38,6 +46,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
   return (
     <form
       className="rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/50 sm:p-6"
+      noValidate
       onSubmit={handleSubmit}
     >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -58,6 +67,7 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
           <input
             className={inputClassName}
             name="checkIn"
+            required
             onChange={(event) => setCheckIn(event.target.value)}
             type="date"
             value={checkIn}
@@ -68,8 +78,9 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
           チェックアウト日
           <input
             className={inputClassName}
-            min={checkIn || undefined}
+            min={checkIn ? getNextDate(checkIn) : undefined}
             name="checkOut"
+            required
             onChange={(event) => setCheckOut(event.target.value)}
             type="date"
             value={checkOut}
@@ -159,6 +170,17 @@ export default function SearchForm({ onSearch, isLoading = false }: SearchFormPr
           {isLoading ? "検索中..." : "この条件で検索"}
         </button>
       </div>
+      {validationMessage && (
+        <p className="mt-4 text-sm font-semibold text-rose-700" role="alert">
+          {validationMessage}
+        </p>
+      )}
     </form>
   );
+}
+
+function getNextDate(date: string): string {
+  const nextDate = new Date(`${date}T00:00:00Z`);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+  return nextDate.toISOString().slice(0, 10);
 }
