@@ -1,5 +1,6 @@
 import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
+import FavoriteButton from "@/components/FavoriteButton";
 
 type HotelCardProps = {
   hotel: Hotel;
@@ -33,6 +34,9 @@ export default function HotelCard({ hotel }: HotelCardProps) {
           <div>
             <p className="mb-1 text-sm font-medium text-sky-700">{hotel.area}</p>
             <h2 className="text-xl font-bold text-slate-900">{hotel.name}</h2>
+            <div className="mt-3">
+              <FavoriteButton hotelId={String(hotel.id)} />
+            </div>
           </div>
           <span className="shrink-0 rounded-md bg-amber-50 px-2.5 py-1 text-sm font-bold text-amber-700">
             ★ {hotel.rating.toFixed(1)}

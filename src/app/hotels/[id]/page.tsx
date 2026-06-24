@@ -1,6 +1,7 @@
 "use client";
 
 import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
+import FavoriteButton from "@/components/FavoriteButton";
 import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
@@ -88,6 +89,9 @@ export default function HotelDetailPage({
                 <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
                   {hotel.name}
                 </h1>
+                <div className="mt-4">
+                  <FavoriteButton hotelId={String(hotel.id)} />
+                </div>
               </div>
               <span className="w-fit shrink-0 rounded-lg bg-amber-50 px-3 py-2 font-bold text-amber-700">
                 ★ {hotel.rating.toFixed(1)}

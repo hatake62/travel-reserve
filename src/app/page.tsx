@@ -5,6 +5,7 @@ import SearchForm from "@/components/SearchForm";
 import { fetchHotels } from "@/lib/hotelApi";
 import type { Hotel } from "@/types/hotel";
 import type { SearchCondition } from "@/types/search";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 const initialSearchCondition: SearchCondition = {
@@ -155,6 +156,12 @@ export default function Home() {
           <p className="max-w-2xl text-base leading-7 text-slate-600">
             目的地と宿泊日を入力して、条件に合うホテルの価格をすばやく比較できます。
           </p>
+          <Link
+            className="inline-flex rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 focus:outline-none focus:ring-4 focus:ring-amber-200"
+            href="/favorites"
+          >
+            ★ お気に入りを見る
+          </Link>
         </header>
 
         <SearchForm isLoading={isLoading} onSearch={loadHotels} />

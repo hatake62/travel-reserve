@@ -38,6 +38,12 @@ npm run dev
 
 起動後、[http://localhost:3000](http://localhost:3000) を開いてください。
 
+## お気に入り機能
+
+ホテル一覧と詳細画面からホテルをお気に入りに登録できます。登録したホテルは [お気に入り一覧](http://localhost:3000/favorites) で確認でき、一覧上で解除した場合も表示へ即時反映されます。
+
+お気に入りのホテルIDはブラウザの `localStorage` に `favoriteHotelIds` というキーで保存します。現時点ではデータベースを使用していないため、別ブラウザや別端末には共有されません。ブラウザのサイトデータを削除した場合もお気に入りは消去されます。
+
 外部API接続時は、`USE_MOCK_HOTELS=false` と必要な認証情報を設定してサーバーを再起動します。`http://localhost:3000/api/hotels?keyword=東京` で変換後のJSONを確認できます。
 
 ## 楽天トラベル・じゃらんProvider
