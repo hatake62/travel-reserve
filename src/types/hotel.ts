@@ -9,6 +9,10 @@ export type HotelOffer = {
 
 export type Hotel = {
   id: string | number;
+  providerIds?: {
+    rakuten?: string;
+    jalan?: string;
+  };
   name: string;
   area: string;
   rating: number;

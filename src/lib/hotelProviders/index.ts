@@ -1,5 +1,6 @@
 import type { Hotel } from "@/types/hotel";
 import type { HotelSearchParams } from "@/types/search";
+import { mergeHotelsByIdentity } from "@/lib/hotelMerge";
 import { getJalanHotelById, getJalanHotels } from "./jalanProvider";
 import { getMockHotelById, getMockHotels } from "./mockProvider";
 import {
@@ -75,9 +76,7 @@ export async function getHotelsFromEnabledProviders(
     options.onNotice?.(`${failures.join(" / ")}。取得できたProviderの結果を表示しています。`);
   }
 
-  // TODO: 同じホテル名・住所・緯度経度を使って楽天とじゃらんのホテルを統合する。
-  // TODO: 同じホテルと判定できた場合は offers に楽天とじゃらんの料金をまとめる。
-  return hotels;
+  return mergeHotelsByIdentity(hotels);
 }
 
 export function getHotelProvider(): HotelProvider {
@@ -90,14 +89,28 @@ export function getHotelProvider(): HotelProvider {
         throw new Error("有効なホテルProviderがありません。環境変数を確認してください。");
       }
       if (providers[0] === mockProvider) return mockProvider.getHotelById(id);
-      if (String(id).startsWith("jalan-")) {
-        return providers.includes(jalanProvider)
-          ? jalanProvider.getHotelById(id)
-          : undefined;
+      const primaryProvider = String(id).startsWith("jalan-")
+        ? jalanProvider
+        : rakutenProvider;
+      if (!providers.includes(primaryProvider)) return undefined;
+
+      const primaryHotel = await primaryProvider.getHotelById(id);
+      if (!primaryHotel || providers.length === 1) return primaryHotel;
+
+      const candidates: Hotel[] = [primaryHotel];
+      for (const provider of providers) {
+        if (provider === primaryProvider) continue;
+        try {
+          candidates.push(...(await provider.getHotels({ keyword: primaryHotel.name })));
+        } catch {
+          // 一覧を表示できたProviderの詳細を、他Providerの一時障害で壊さない。
+        }
       }
-      return providers.includes(rakutenProvider)
-        ? rakutenProvider.getHotelById(id)
-        : undefined;
+      return mergeHotelsByIdentity(candidates).find((hotel) =>
+        Object.values(hotel.providerIds ?? {}).includes(
+          String(id).replace(/^jalan-/, ""),
+        ),
+      ) ?? primaryHotel;
     },
   };
 }

@@ -122,6 +122,7 @@ export function mapRakutenKeywordHotelToHotel(
 
   return {
     id: Number(basicInfo.hotelNo),
+    providerIds: { rakuten: String(basicInfo.hotelNo) },
     name: basicInfo.hotelName,
     area: address || entry.hotelDetailInfo?.areaName || "エリア情報なし",
     rating: toFiniteNumber(basicInfo.reviewAverage),

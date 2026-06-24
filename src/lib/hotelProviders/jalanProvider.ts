@@ -116,6 +116,7 @@ export function mapJalanHotelToHotel(entry: JalanHotel): Hotel | null {
   const bookingUrl = entry.HotelDetailURL || entry.PlanListURL || "";
   return {
     id: `jalan-${entry.HotelID}`,
+    providerIds: { jalan: String(entry.HotelID) },
     name: entry.HotelName,
     area: entry.HotelAddress || getArea(entry) || "エリア情報なし",
     rating: Math.max(0, toFiniteNumber(entry.Rating)),
