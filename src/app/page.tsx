@@ -17,13 +17,14 @@ export default function Home() {
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     initialSearchCondition,
   );
-  const destination = searchCondition.destination.trim().toLowerCase();
+  // Hotel の料金は offers に集約し、検索対象はホテル固有の情報に限定する。
+  const destination = searchCondition.destination.trim().toLocaleLowerCase("ja");
   const filteredHotels = hotels.filter((hotel) => {
     if (!destination) return true;
 
     return (
-      hotel.name.toLowerCase().includes(destination) ||
-      hotel.area.toLowerCase().includes(destination)
+      hotel.name.toLocaleLowerCase("ja").includes(destination) ||
+      hotel.area.toLocaleLowerCase("ja").includes(destination)
     );
   });
 
@@ -64,7 +65,7 @@ export default function Home() {
           </div>
 
           {filteredHotels.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid items-start gap-6 lg:grid-cols-2">
               {filteredHotels.map((hotel) => (
                 <HotelCard hotel={hotel} key={hotel.id} />
               ))}
