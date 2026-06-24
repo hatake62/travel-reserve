@@ -11,22 +11,67 @@ const initialSearchCondition: SearchCondition = {
   checkIn: "",
   checkOut: "",
   guests: 2,
+  sortBy: "recommended",
+  maxPrice: null,
+  site: "",
+  breakfastOnly: false,
 };
+
+const getLowestPrice = (hotel: (typeof hotels)[number]) =>
+  hotel.offers.reduce<number | undefined>(
+    (lowest, offer) =>
+      lowest === undefined || offer.price < lowest ? offer.price : lowest,
+    undefined,
+  );
 
 export default function Home() {
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     initialSearchCondition,
   );
-  // Hotel の料金は offers に集約し、検索対象はホテル固有の情報に限定する。
   const destination = searchCondition.destination.trim().toLocaleLowerCase("ja");
-  const filteredHotels = hotels.filter((hotel) => {
-    if (!destination) return true;
+  const filteredHotels = hotels
+    .filter((hotel) => {
+      const matchesDestination =
+        !destination ||
+        hotel.name.toLocaleLowerCase("ja").includes(destination) ||
+        hotel.area.toLocaleLowerCase("ja").includes(destination);
+      const lowestPrice = getLowestPrice(hotel);
+      const matchesMaxPrice =
+        searchCondition.maxPrice === null ||
+        (lowestPrice !== undefined && lowestPrice <= searchCondition.maxPrice);
+      const matchesSite =
+        !searchCondition.site ||
+        hotel.offers.some((offer) => offer.site === searchCondition.site);
+      const matchesBreakfast =
+        !searchCondition.breakfastOnly ||
+        hotel.offers.some((offer) => offer.hasBreakfast);
 
-    return (
-      hotel.name.toLocaleLowerCase("ja").includes(destination) ||
-      hotel.area.toLocaleLowerCase("ja").includes(destination)
-    );
-  });
+      return (
+        matchesDestination && matchesMaxPrice && matchesSite && matchesBreakfast
+      );
+    })
+    .sort((a, b) => {
+      if (searchCondition.sortBy === "ratingDesc") {
+        return b.rating - a.rating;
+      }
+
+      if (
+        searchCondition.sortBy === "priceAsc" ||
+        searchCondition.sortBy === "priceDesc"
+      ) {
+        const priceA = getLowestPrice(a);
+        const priceB = getLowestPrice(b);
+
+        if (priceA === undefined) return priceB === undefined ? 0 : 1;
+        if (priceB === undefined) return -1;
+
+        return searchCondition.sortBy === "priceAsc"
+          ? priceA - priceB
+          : priceB - priceA;
+      }
+
+      return 0;
+    });
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-6 sm:py-14">
@@ -60,7 +105,7 @@ export default function Home() {
               aria-live="polite"
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200"
             >
-              {filteredHotels.length}件のホテル
+              {hotels.length}件中{filteredHotels.length}件を表示中
             </p>
           </div>
 
@@ -76,10 +121,10 @@ export default function Home() {
               role="status"
             >
               <p className="text-lg font-bold text-slate-800">
-                条件に一致するホテルが見つかりませんでした
+                条件に一致するホテルが見つかりませんでした。
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                目的地を変更して、もう一度検索してください。
+                検索条件を変更して、もう一度お試しください。
               </p>
             </div>
           )}
