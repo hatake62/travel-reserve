@@ -1,20 +1,32 @@
 import { findMockAreaCandidates } from "@/lib/hotelProviders/mockAreaProvider";
-import { findRakutenAreaCandidates } from "@/lib/hotelProviders/rakutenAreaProvider";
+import {
+  findRakutenAreaCandidates,
+  findRakutenAreaCandidatesWithDebug,
+} from "@/lib/hotelProviders/rakutenAreaProvider";
 import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
 import { NextResponse } from "next/server";
 
 const MAX_CANDIDATES = 20;
 
 export async function GET(request: Request) {
-  const keyword = new URL(request.url).searchParams.get("keyword")?.trim() ?? "";
+  const params = new URL(request.url).searchParams;
+  const keyword = params.get("keyword")?.trim() ?? "";
+  const debug = params.get("debug") === "true";
   if (!keyword) return NextResponse.json([]);
 
   try {
-    const findAreaCandidates =
-      process.env.USE_MOCK_HOTELS === "false"
-        ? findRakutenAreaCandidates
-        : findMockAreaCandidates;
-    const candidates = await findAreaCandidates(keyword);
+    const useRakuten = process.env.USE_MOCK_HOTELS === "false";
+    if (debug && useRakuten) {
+      const result = await findRakutenAreaCandidatesWithDebug(keyword);
+      return NextResponse.json({
+        candidates: result.candidates.slice(0, MAX_CANDIDATES),
+        debug: result.debug,
+      });
+    }
+
+    const candidates = await (useRakuten
+      ? findRakutenAreaCandidates(keyword)
+      : findMockAreaCandidates(keyword));
     return NextResponse.json(candidates.slice(0, MAX_CANDIDATES));
   } catch (error) {
     console.error("Failed to fetch Rakuten areas:", error);

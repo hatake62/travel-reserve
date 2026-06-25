@@ -586,6 +586,34 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 /api/hotels/rakuten-78182/booking-url?checkIn=2026-08-10&checkOut=2026-08-11&adults=2
 ```
 
+## 楽天地区候補検索
+
+ホテル検索フォームの地区候補は、楽天トラベル地区コードAPI `GetAreaClass` から取得します。
+
+仕様:
+
+- 楽天地区コードAPIの `largeClass`、`middleClass`、`smallClass`、`detailClass` の階層をフラット化し、都道府県単位、中分類、小分類、詳細分類を候補として扱います。
+- 検索対象には地区名だけでなく、各階層のコードと表示ラベルも含めます。
+- 都道府県名の表記ゆれに対応します。例: `東京` / `東京都`、`大阪` / `大阪府`、`京都` / `京都府`、`栃木` / `栃木県`。
+- `北海道` は末尾の `道` を外さず、`北海道` として検索します。
+- 例として `東京`、`栃木`、`栃木県`、`日光`、`那須`、`宇都宮`、`大阪`、`京都`、`北海道`、`福岡`、`沖縄` などを地区候補検索できます。
+- 候補がない場合でもホテル検索自体はエラーにせず、目的地キーワード検索へフォールバックできます。
+- 地区候補取得結果はメモリ上に短時間キャッシュし、楽天APIへの呼び出し回数を抑えます。Vercelのインスタンスが切り替わるとキャッシュはリセットされます。
+
+通常確認:
+
+```text
+/api/areas?keyword=栃木
+```
+
+デバッグ確認:
+
+```text
+/api/areas?keyword=栃木&debug=true
+```
+
+`debug=true` では `rawMiddleClassCount`、`flattenedCandidateCount`、`matchedCount`、`normalizedKeywords`、`firstCandidateLabels`、`warnings` を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
+
 じゃらんProvider確認:
 
 1. Vercelで `USE_MOCK_HOTELS=false` を設定する。

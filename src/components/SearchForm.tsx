@@ -55,9 +55,15 @@ export default function SearchForm({
   };
 
   const handleFindAreas = async () => {
-    if (!destination.trim()) {
+    const trimmedDestination = destination.trim();
+    if (!trimmedDestination) {
       setAreaCandidates([]);
       setAreaError("目的地を入力してください。");
+      return;
+    }
+    if (trimmedDestination.length < 2) {
+      setAreaCandidates([]);
+      setAreaError("地区候補は2文字以上で検索してください。");
       return;
     }
 
@@ -65,7 +71,7 @@ export default function SearchForm({
     setAreaError(null);
     try {
       const response = await fetch(
-        `/api/areas?keyword=${encodeURIComponent(destination.trim())}`,
+        `/api/areas?keyword=${encodeURIComponent(trimmedDestination)}`,
       );
       const data = (await response.json()) as
         | RakutenAreaCandidate[]
@@ -128,7 +134,7 @@ export default function SearchForm({
               setAreaCandidates([]);
               setAreaError(null);
             }}
-            placeholder="例: 東京、新宿"
+            placeholder="例: 東京、栃木、日光、那須"
             type="text"
             value={destination}
           />
@@ -144,18 +150,18 @@ export default function SearchForm({
           {areaCandidates.length > 0 && (
             <ul className="grid gap-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
               {areaCandidates.map((candidate) => (
-                <li key={`${candidate.areaClassCode}-${candidate.middleClassCode}-${candidate.smallClassCode}-${candidate.detailClassCode}`}>
+                <li key={`${candidate.areaClassCode}-${candidate.middleClassCode}-${candidate.smallClassCode}-${candidate.detailClassCode}-${candidate.displayName}`}>
                   <button
                     className="w-full rounded-md px-2 py-2 text-left text-xs font-medium text-slate-700 hover:bg-white hover:text-sky-800"
                     onClick={() => {
-                      setDestination(candidate.displayName);
+                      setDestination(candidate.label ?? candidate.displayName);
                       setRakutenAreaCandidate(candidate);
                       setAreaCandidates([]);
                       setAreaError(null);
                     }}
                     type="button"
                   >
-                    {candidate.displayName}
+                    {candidate.label ?? candidate.displayName}
                   </button>
                 </li>
               ))}
@@ -163,7 +169,7 @@ export default function SearchForm({
           )}
           {rakutenAreaCandidate && (
             <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800" role="status">
-              選択中の地区：{rakutenAreaCandidate.displayName}
+              選択中の地区：{rakutenAreaCandidate.label ?? rakutenAreaCandidate.displayName}
             </p>
           )}
         </div>
