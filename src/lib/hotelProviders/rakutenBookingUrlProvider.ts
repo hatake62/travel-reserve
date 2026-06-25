@@ -54,6 +54,55 @@ function getRakutenHotelNo(hotelId: string): string {
   return hotelId.replace(/^rakuten-/, "").trim();
 }
 
+function applyStayParams(
+  url: URL,
+  checkInDate: string,
+  checkOutDate: string,
+  adults: number,
+): void {
+  const [checkInYear, checkInMonth, checkInDay] = checkInDate.split("-");
+  const [checkOutYear, checkOutMonth, checkOutDay] = checkOutDate.split("-");
+  url.searchParams.set("f_nen1", checkInYear);
+  url.searchParams.set("f_tuki1", checkInMonth);
+  url.searchParams.set("f_hi1", checkInDay);
+  url.searchParams.set("f_nen2", checkOutYear);
+  url.searchParams.set("f_tuki2", checkOutMonth);
+  url.searchParams.set("f_hi2", checkOutDay);
+  url.searchParams.set("f_otona_su", String(adults));
+  if (!url.searchParams.has("f_heya_su")) {
+    url.searchParams.set("f_heya_su", "1");
+  }
+}
+
+function createPlanDetailUrl({
+  reserveUrl,
+  hotelNo,
+  checkInDate,
+  checkOutDate,
+  adults,
+}: {
+  reserveUrl: string;
+  hotelNo: string;
+  checkInDate: string;
+  checkOutDate: string;
+  adults: number;
+}): string {
+  if (!reserveUrl) return "";
+  try {
+    const sourceUrl = new URL(reserveUrl);
+    const planUrl = new URL(
+      `https://hotel.travel.rakuten.co.jp/hotelinfo/plan/${hotelNo}`,
+    );
+    sourceUrl.searchParams.forEach((value, key) => {
+      planUrl.searchParams.set(key, value);
+    });
+    applyStayParams(planUrl, checkInDate, checkOutDate, adults);
+    return planUrl.toString();
+  } catch {
+    return "";
+  }
+}
+
 function findRecords(value: unknown): Record<string, unknown>[] {
   if (Array.isArray(value)) return value.flatMap(findRecords);
   if (!isRecord(value)) return [];
@@ -82,6 +131,17 @@ function getRoomPrice(record: Record<string, unknown>): number | null {
 function extractBookingLinks(
   value: unknown,
   fallbackUrl: string,
+  {
+    hotelNo,
+    checkInDate,
+    checkOutDate,
+    adults,
+  }: {
+    hotelNo: string;
+    checkInDate: string;
+    checkOutDate: string;
+    adults: number;
+  },
 ): {
   links: BookingLink[];
   planListUrl: string;
@@ -96,11 +156,18 @@ function extractBookingLinks(
     .filter((record) => record.reserveUrl || record.roomName || record.planName)
     .map((record): BookingLink | null => {
       const reserveUrl = getString(record.reserveUrl);
-      if (!reserveUrl) return null;
+      const planDetailUrl = createPlanDetailUrl({
+        reserveUrl,
+        hotelNo,
+        checkInDate,
+        checkOutDate,
+        adults,
+      });
+      if (!planDetailUrl) return null;
       const price = getRoomPrice(record);
       return {
         label: "最安プランを楽天トラベルで見る",
-        url: reserveUrl,
+        url: planDetailUrl,
         price,
         roomName: getString(record.roomName) || undefined,
         planName: getString(record.planName) || undefined,
@@ -201,7 +268,12 @@ export async function fetchRakutenBookingLinks({
     throw new Error(`楽天トラベルAPIから予約リンクを取得できませんでした: ${detail}`);
   }
 
-  const extracted = extractBookingLinks(data.hotels, fallbackUrl);
+  const extracted = extractBookingLinks(data.hotels, fallbackUrl, {
+    hotelNo,
+    checkInDate,
+    checkOutDate,
+    adults,
+  });
   const effectiveFallbackUrl =
     extracted.fallbackUrl || extracted.planListUrl || extracted.bestReserveUrl;
 

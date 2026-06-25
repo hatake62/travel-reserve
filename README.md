@@ -572,7 +572,8 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 仕様:
 
 - 指定した宿泊日・人数がある場合、楽天トラベル空室検索APIへ `hotelNo`、`checkinDate`、`checkoutDate`、`adultNum` を指定して問い合わせます。
-- 取得できた場合は、`roomBasicInfo.reserveUrl` を優先して「最安プランを楽天トラベルで見る」に使います。
+- 取得できた場合は、`roomBasicInfo.reserveUrl` に含まれるプラン識別子を使い、`/hotelinfo/plan/{hotelNo}` 形式のプラン詳細URLを「最安プランを楽天トラベルで見る」に使います。
+- `reserveUrl` は予約確認画面へ進むことがあるため、画面上のリンクでは直接使わず、宿泊日・人数のクエリを保持したプラン詳細URLへ変換します。
 - `reserveUrl` がない場合は、`hotelBasicInfo.planListUrl`、`hotelBasicInfo.hotelInformationUrl` の順にフォールバックします。
 - 楽天APIが `Data Not Found`、`not_found`、HTTP 404を返した場合は、指定条件で空室・料金が見つからない状態として扱い、通常の楽天トラベルページへのリンクを表示します。
 - 楽天APIの仕様上、必ずしもすべての宿泊条件で予約リンクが取得できるとは限りません。
