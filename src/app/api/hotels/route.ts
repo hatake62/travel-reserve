@@ -1,6 +1,7 @@
 import { fetchHotels } from "@/lib/hotelApi";
 import { NextResponse } from "next/server";
 import { validateHotelSearch } from "@/lib/searchValidation";
+import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
 
 export async function GET(request: Request) {
   try {
@@ -19,7 +20,13 @@ export async function GET(request: Request) {
     if (hasCompleteStayCondition) {
       const validationMessage = validateHotelSearch({ checkIn, checkOut, guests });
       if (validationMessage) {
-        return NextResponse.json({ error: validationMessage }, { status: 400 });
+        return NextResponse.json(
+          createApiErrorResponse(
+            validationMessage,
+            "チェックイン日、チェックアウト日、人数を確認してください",
+          ),
+          { status: 400 },
+        );
       }
     }
 
@@ -65,14 +72,16 @@ export async function GET(request: Request) {
     const isCredentialError =
       message.includes("RAKUTEN_TRAVEL_") || message.includes("JALAN_API_KEY");
     const hasStayCondition = new URL(request.url).searchParams.has("checkIn");
+    const providerHint = getProviderErrorHint(message);
+    const responseMessage = message.includes("有効なホテルProviderがありません")
+      ? "有効なホテルProviderがありません"
+      : isCredentialError
+      ? `APIキーを確認してください: ${message}`
+      : hasStayCondition
+      ? `空室情報の取得に失敗しました: ${message}`
+      : message || "ホテル情報の取得に失敗しました";
     return NextResponse.json(
-      {
-        error: isCredentialError
-          ? `APIキーを確認してください: ${message}`
-          : hasStayCondition
-          ? `空室情報の取得に失敗しました: ${message}`
-          : message || "ホテル情報の取得に失敗しました",
-      },
+      createApiErrorResponse(responseMessage, providerHint),
       { status: 500 },
     );
   }

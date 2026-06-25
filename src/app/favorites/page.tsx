@@ -1,27 +1,61 @@
 "use client";
 
+import EmptyState from "@/components/EmptyState";
+import ErrorMessage from "@/components/ErrorMessage";
 import HotelCard from "@/components/HotelCard";
+import LoadingState from "@/components/LoadingState";
 import {
   getFavoriteHotelIdsSnapshot,
   subscribeToFavoriteHotelIds,
 } from "@/lib/favorites";
-import { fetchHotels } from "@/lib/hotelApi";
+import { fetchHotels, HotelApiError } from "@/lib/hotelApi";
 import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 const getServerSnapshot = () => "[]";
+
+type PageError = {
+  message: string;
+  hint?: string;
+};
 
 export default function FavoritesPage() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [error, setError] = useState<PageError | null>(null);
   const favoriteIdsSnapshot = useSyncExternalStore(
     subscribeToFavoriteHotelIds,
     getFavoriteHotelIdsSnapshot,
     getServerSnapshot,
   );
   const favoriteIds = JSON.parse(favoriteIdsSnapshot) as string[];
+
+  const loadHotels = useCallback((resetState = true) => {
+    const controller = new AbortController();
+
+    if (resetState) {
+      setIsLoading(true);
+      setError(null);
+    }
+    fetchHotels({ signal: controller.signal })
+      .then(setHotels)
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setError({
+          message:
+            error instanceof Error
+              ? error.message
+              : "ホテル情報の取得に失敗しました",
+          hint: error instanceof HotelApiError ? error.hint : undefined,
+        });
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false);
+      });
+
+    return controller;
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -30,7 +64,13 @@ export default function FavoritesPage() {
       .then(setHotels)
       .catch((error: unknown) => {
         if (error instanceof Error && error.name === "AbortError") return;
-        setErrorMessage("ホテル情報の取得に失敗しました");
+        setError({
+          message:
+            error instanceof Error
+              ? error.message
+              : "ホテル情報の取得に失敗しました",
+          hint: error instanceof HotelApiError ? error.hint : undefined,
+        });
       })
       .finally(() => {
         if (!controller.signal.aborted) setIsLoading(false);
@@ -63,13 +103,15 @@ export default function FavoritesPage() {
         </header>
 
         {isLoading ? (
-          <p className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center font-bold" role="status">
-            ホテル情報を読み込んでいます…
-          </p>
-        ) : errorMessage ? (
-          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-6 py-16 text-center font-bold text-rose-800" role="alert">
-            {errorMessage}
-          </p>
+          <LoadingState message="お気に入りのホテル情報を読み込んでいます..." />
+        ) : error ? (
+          <ErrorMessage
+            hint={error.hint}
+            message={error.message}
+            onRetry={() => {
+              loadHotels();
+            }}
+          />
         ) : favoriteHotels.length > 0 ? (
           <div className="grid items-start gap-6 lg:grid-cols-2">
             {favoriteHotels.map((hotel) => (
@@ -77,14 +119,14 @@ export default function FavoritesPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
-            <p className="font-bold text-slate-800">
-              お気に入りに登録したホテルはまだありません
-            </p>
-            <p className="mt-2 text-sm text-slate-500">
-              ホテルカードや詳細ページのボタンから追加できます。
-            </p>
-          </div>
+          <EmptyState
+            actionLabel="ホテルを探す"
+            message="ホテルカードや詳細ページのボタンから追加できます。"
+            onAction={() => {
+              window.location.href = "/";
+            }}
+            title="お気に入りに登録したホテルはまだありません"
+          />
         )}
       </div>
     </main>

@@ -64,6 +64,10 @@ npm run dev
 
 一覧、詳細、お気に入りのUIは、検索フォーム、結果件数、0件表示、ホテルカード、予約サイトごとの料金比較がスマホでも崩れにくい余白と配置になるよう調整しています。
 
+検索中は共通の `LoadingState` で「ホテル情報を検索中...」とスピナーを表示します。API取得失敗やProvider設定ミスは `ErrorMessage` にタイトル、エラーメッセージ、ヒント、再試行ボタンを表示します。検索結果やお気に入りが0件の場合は `EmptyState` で理由と次の操作を示し、トップページでは条件リセットボタンから検索条件とURLクエリを初期化できます。
+
+存在しない詳細ページなどは `src/app/not-found.tsx` の404ページを表示します。予期しない画面エラーは `src/app/error.tsx` で受け、再試行ボタンからNext.jsの `reset()` を実行できます。
+
 ## 楽天トラベル・じゃらんProvider
 
 `/api/hotels` は有効なProviderを呼び出し、楽天トラベルとじゃらんのレスポンスを共通の `Hotel` / `HotelOffer` 型へ変換します。その後、同じホテルと思われる結果を1件に名寄せし、楽天トラベルとじゃらんの料金をそのホテルの `offers` にまとめます。じゃらんの宿には `jalan-` で始まるIDを付け、Provider固有IDは `providerIds` にも保持します。料金を取得できない場合は `0` として保持しますが、画面には0円ではなく「料金未定」または「価格不明」と表示します。
@@ -73,6 +77,39 @@ npm run dev
 この判定はヒューリスティックであり完全ではありません。緯度経度はまだHotel型に保持しておらず、住所正規化も都道府県・市区町村表記などの簡易処理に留まります。今後は緯度経度、住所の構造化、名称の類似度スコア、手動統合ルールを組み合わせて誤統合と統合漏れを減らす予定です。
 
 複数Providerのうち一部だけが失敗した場合は、取得できたProviderの結果を返して画面に警告を表示します。すべて失敗した場合、または有効なProviderがない場合はエラーを返します。詳細ページでは代表IDのホテルを取得後、ホテル名で他Providerを再検索してoffersを統合します。API側が該当宿を返さない場合は代表Providerの情報だけを表示します。
+
+APIエラーは可能な範囲で次のJSON形式を返します。
+
+```json
+{
+  "error": "エラーメッセージ",
+  "hint": "解決方法のヒント"
+}
+```
+
+Provider設定ミスが疑われる場合は、次のURLで現在の設定状態を確認できます。
+
+```text
+/api/debug/provider-config
+```
+
+返却例:
+
+```json
+{
+  "useMockHotels": false,
+  "useRakutenProvider": false,
+  "useJalanProvider": false,
+  "enabledProviders": [],
+  "hasRakutenTravelAppId": false,
+  "hasRakutenTravelAccessKey": false,
+  "hasJalanApiKey": false,
+  "status": "error",
+  "hint": ".env.localでUSE_MOCK_HOTELS=trueにするか、USE_RAKUTEN_PROVIDER=trueなどを設定してください"
+}
+```
+
+`enabledProviders` が空の場合、`/api/hotels` は「有効なホテルProviderがありません」と `hint` を返し、画面では「ホテル情報を取得できませんでした」「有効なホテルProviderがありません」「.env.local の設定を確認してください」と表示します。`.env.local` を変更した後は開発サーバーを再起動してください。
 
 ### Provider別の動作確認
 

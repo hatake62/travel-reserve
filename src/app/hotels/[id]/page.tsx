@@ -1,8 +1,10 @@
 "use client";
 
-import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
+import ErrorMessage from "@/components/ErrorMessage";
 import FavoriteButton from "@/components/FavoriteButton";
 import HotelImage from "@/components/HotelImage";
+import LoadingState from "@/components/LoadingState";
+import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
 import {
   formatPrice,
   getLowestValidOffer,
@@ -11,10 +13,16 @@ import {
 } from "@/lib/price";
 import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 
 type HotelDetailPageProps = {
   params: Promise<{ id: string }>;
+};
+
+type PageError = {
+  message: string;
+  hint?: string;
+  isNotFound?: boolean;
 };
 
 export default function HotelDetailPage({
@@ -23,7 +31,41 @@ export default function HotelDetailPage({
   const { id } = use(params);
   const [hotel, setHotel] = useState<Hotel | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [error, setError] = useState<PageError | null>(null);
+
+  const loadHotel = useCallback((resetState = true) => {
+    let isActive = true;
+
+    if (resetState) {
+      setIsLoading(true);
+      setError(null);
+    }
+    fetchHotelById(id)
+      .then((data) => {
+        if (isActive) setHotel(data);
+      })
+      .catch((error: unknown) => {
+        if (!isActive) return;
+        const isNotFound = error instanceof HotelApiError && error.status === 404;
+        setError({
+          message: isNotFound
+            ? "ホテルが見つかりませんでした"
+            : error instanceof Error
+            ? error.message
+            : "ホテル情報の取得に失敗しました",
+          hint: error instanceof HotelApiError ? error.hint : undefined,
+          isNotFound,
+        });
+        setHotel(null);
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
 
   useEffect(() => {
     let isActive = true;
@@ -34,11 +76,17 @@ export default function HotelDetailPage({
       })
       .catch((error: unknown) => {
         if (!isActive) return;
-        setErrorMessage(
-          error instanceof HotelApiError && error.status === 404
+        const isNotFound = error instanceof HotelApiError && error.status === 404;
+        setError({
+          message: isNotFound
             ? "ホテルが見つかりませんでした"
+            : error instanceof Error
+            ? error.message
             : "ホテル情報の取得に失敗しました",
-        );
+          hint: error instanceof HotelApiError ? error.hint : undefined,
+          isNotFound,
+        });
+        setHotel(null);
       })
       .finally(() => {
         if (isActive) setIsLoading(false);
@@ -50,11 +98,33 @@ export default function HotelDetailPage({
   }, [id]);
 
   if (isLoading) {
-    return <StatusMessage message="ホテル情報を読み込んでいます…" />;
+    return (
+      <StatusShell>
+        <LoadingState message="ホテル情報を読み込んでいます..." />
+      </StatusShell>
+    );
   }
 
-  if (errorMessage || !hotel) {
-    return <StatusMessage isError message={errorMessage ?? "ホテルが見つかりませんでした"} />;
+  if (error?.isNotFound) {
+    return <DetailNotFound />;
+  }
+
+  if (error) {
+    return (
+      <StatusShell>
+        <ErrorMessage
+          hint={error.hint}
+          message={error.message}
+          onRetry={() => {
+            loadHotel();
+          }}
+        />
+      </StatusShell>
+    );
+  }
+
+  if (!hotel) {
+    return <DetailNotFound />;
   }
 
   const sortedOffers = sortOffersByPrice(hotel.offers);
@@ -198,24 +268,38 @@ export default function HotelDetailPage({
   );
 }
 
-function StatusMessage({
-  message,
-  isError = false,
-}: {
-  message: string;
-  isError?: boolean;
-}) {
+function StatusShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-16 text-slate-900">
-      <div
-        className={`mx-auto max-w-xl rounded-2xl border bg-white px-6 py-16 text-center shadow-sm ${
-          isError ? "border-rose-200" : "border-slate-200"
-        }`}
-        role={isError ? "alert" : "status"}
-      >
-        <p className="text-lg font-bold text-slate-800">{message}</p>
-        <Link className="mt-5 inline-block font-bold text-sky-700" href="/">
+      <div className="mx-auto max-w-xl">
+        <Link
+          className="mb-6 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          href="/"
+        >
           ホテル一覧へ戻る
+        </Link>
+        {children}
+      </div>
+    </main>
+  );
+}
+
+function DetailNotFound() {
+  return (
+    <main className="min-h-screen bg-slate-50 px-5 py-16 text-slate-900">
+      <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
+        <p className="text-sm font-bold text-sky-700">404 Not Found</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">
+          ページが見つかりません
+        </h1>
+        <p className="mt-4 text-sm leading-6 text-slate-600">
+          指定されたホテル情報は存在しないか、削除された可能性があります。
+        </p>
+        <Link
+          className="mt-7 inline-flex h-11 items-center justify-center rounded-lg bg-sky-700 px-5 text-sm font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          href="/"
+        >
+          トップページへ戻る
         </Link>
       </div>
     </main>

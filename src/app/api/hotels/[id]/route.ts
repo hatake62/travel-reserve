@@ -1,4 +1,5 @@
 import { fetchHotelById } from "@/lib/hotelApi";
+import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
 import { NextResponse } from "next/server";
 
 type HotelRouteContext = {
@@ -12,7 +13,10 @@ export async function GET(_request: Request, { params }: HotelRouteContext) {
 
     if (!hotel) {
       return NextResponse.json(
-        { error: "ホテルが見つかりませんでした" },
+        createApiErrorResponse(
+          "ホテルが見つかりませんでした",
+          "一覧ページから現在表示できるホテルを選択してください",
+        ),
         { status: 404 },
       );
     }
@@ -20,8 +24,16 @@ export async function GET(_request: Request, { params }: HotelRouteContext) {
     return NextResponse.json(hotel);
   } catch (error) {
     console.error("Failed to fetch hotel:", error);
+    const message =
+      error instanceof Error ? error.message : "ホテル情報の取得に失敗しました";
     return NextResponse.json(
-      { error: "ホテル情報の取得に失敗しました" },
+      createApiErrorResponse(
+        message.includes("有効なホテルProviderがありません")
+          ? "有効なホテルProviderがありません"
+          : "ホテル情報の取得に失敗しました",
+        getProviderErrorHint(message) ??
+          "時間をおいて再試行するか、Provider設定を確認してください",
+      ),
       { status: 500 },
     );
   }
