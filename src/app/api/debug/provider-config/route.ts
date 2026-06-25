@@ -26,6 +26,7 @@ export async function GET() {
       hasRakutenTravelAccessKey: Boolean(
         process.env.RAKUTEN_TRAVEL_ACCESS_KEY,
       ),
+      hasRakutenAffiliateId: Boolean(process.env.RAKUTEN_AFFILIATE_ID),
       hasJalanApiKey: Boolean(process.env.JALAN_API_KEY),
       status: enabledProviders.length > 0 ? "ok" : "error",
       hint:

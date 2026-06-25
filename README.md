@@ -135,6 +135,79 @@ npm run dev
 http://localhost:3000
 ```
 
+## デプロイ方法
+
+Vercelにデプロイする場合は、次の手順で設定します。
+
+1. GitHubにこのリポジトリをpushします。
+2. VercelでGitHubリポジトリをImportします。
+3. Framework Presetは `Next.js` を選びます。
+4. Install Commandは `npm install` を指定します。
+5. Build Commandは `npm run build` を指定します。
+6. Output Directoryは通常変更しません。
+7. Environment Variablesに `.env.example` と同じキーを登録します。
+8. まずは `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。
+9. 外部APIを使う場合は、Vercel側にもAPIキーを登録します。
+10. 環境変数を変更したら再デプロイが必要です。
+
+デプロイ前にローカルで次のコマンドが通ることを確認してください。
+
+```bash
+npm run lint
+npm run build
+```
+
+## Vercel環境変数の設定例
+
+最初に仮データで公開する場合:
+
+```dotenv
+USE_MOCK_HOTELS=true
+USE_RAKUTEN_PROVIDER=false
+USE_JALAN_PROVIDER=false
+
+RAKUTEN_TRAVEL_APP_ID=
+RAKUTEN_TRAVEL_ACCESS_KEY=
+RAKUTEN_AFFILIATE_ID=
+JALAN_API_KEY=
+```
+
+楽天APIを使う場合:
+
+```dotenv
+USE_MOCK_HOTELS=false
+USE_RAKUTEN_PROVIDER=true
+USE_JALAN_PROVIDER=false
+
+RAKUTEN_TRAVEL_APP_ID=...
+RAKUTEN_TRAVEL_ACCESS_KEY=...
+RAKUTEN_AFFILIATE_ID=
+JALAN_API_KEY=
+```
+
+楽天 + じゃらんを使う場合:
+
+```dotenv
+USE_MOCK_HOTELS=false
+USE_RAKUTEN_PROVIDER=true
+USE_JALAN_PROVIDER=true
+
+RAKUTEN_TRAVEL_APP_ID=...
+RAKUTEN_TRAVEL_ACCESS_KEY=...
+RAKUTEN_AFFILIATE_ID=
+JALAN_API_KEY=...
+```
+
+## 本番公開時の注意事項
+
+- APIキーをコードやREADMEに直接書かないでください。
+- APIキーには `NEXT_PUBLIC_` を付けないでください。
+- ブラウザ側から直接予約サイトAPIを呼ばないでください。
+- 外部APIはRoute Handler経由で呼んでください。
+- `.env.local` はGitHubにpushしないでください。
+- 予約サイトの情報取得は各サービスの利用規約に従ってください。
+- 本番公開時は価格表示に「実際の予約条件は予約サイトで確認してください」などの注意文を入れてください。
+
 ## 動作確認方法
 
 - トップページでホテル一覧が表示される
