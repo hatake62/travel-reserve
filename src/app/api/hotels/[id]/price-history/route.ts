@@ -24,6 +24,11 @@ function addDays(dateString: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+function isCheckOutAfterCheckIn(checkInDate: string, checkOutDate: string): boolean {
+  return new Date(`${checkOutDate}T00:00:00.000Z`).getTime() >
+    new Date(`${checkInDate}T00:00:00.000Z`).getTime();
+}
+
 export async function GET(request: Request, { params }: PriceHistoryRouteContext) {
   try {
     const { id } = await params;
@@ -36,6 +41,12 @@ export async function GET(request: Request, { params }: PriceHistoryRouteContext
       ? searchParams.get("checkOut")!
       : addDays(checkInDate, 1);
     const adults = parseAdults(searchParams.get("adults"));
+    if (!isCheckOutAfterCheckIn(checkInDate, checkOutDate)) {
+      return NextResponse.json(
+        createApiErrorResponse("チェックアウト日はチェックイン日より後にしてください"),
+        { status: 400 },
+      );
+    }
 
     const { points, warnings } = await getPriceHistory({
       hotelId: id,

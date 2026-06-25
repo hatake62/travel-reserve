@@ -346,7 +346,7 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 重要な前提:
 
 - 楽天トラベルAPIから過去の料金履歴を後から直接取得することはできません。
-- このアプリでは、Vercel Cronで毎日現在価格を取得し、PostgreSQLへスナップショットとして保存します。
+- このアプリでは、楽天APIで取得したその時点の価格をPostgreSQLへスナップショットとして保存します。
 - グラフはDBに保存済みの実データ `hotel_price_snapshots` だけを表示します。
 - サンプルデータは返しません。
 - 記録開始前の過去データは存在しません。
@@ -362,7 +362,7 @@ DATABASE_URL=
 CRON_SECRET=
 ```
 
-`DATABASE_URL` はNeonやSupabaseなど、PostgreSQLに接続できるURLを設定します。`CRON_SECRET` は `/api/cron/capture-price-snapshots` を保護するための秘密文字列です。どちらも実値を画面、ログ、APIレスポンス、READMEに出さないでください。Vercelで環境変数を変更した後はRedeployが必要です。
+`DATABASE_URL` はNeonやSupabaseなど、PostgreSQLに接続できるURLを設定します。`CRON_SECRET` は後続でCron自動保存を有効化する場合に使う任意の秘密文字列です。どちらも実値を画面、ログ、APIレスポンス、READMEに出さないでください。Vercelで環境変数を変更した後はRedeployが必要です。
 
 テーブル設計:
 
@@ -377,7 +377,7 @@ CRON_SECRET=
 - `check_in_date`: 宿泊開始日
 - `check_out_date`: 宿泊終了日
 - `adults`: 大人人数
-- `enabled`: Cron取得対象にするか
+- `enabled`: 取得対象にするか
 - `created_at`: DB登録日時
 - `updated_at`: DB更新日時
 
@@ -452,26 +452,35 @@ ON hotel_price_snapshots (
 /api/hotels/rakuten-78182/price-history?checkIn=2026-08-10&checkOut=2026-08-11&adults=2
 ```
 
-Cron API:
+追跡対象API:
 
 ```text
-/api/cron/capture-price-snapshots
+GET /api/price-watch/targets
+POST /api/price-watch/targets
 ```
 
-Vercel Cronから毎日1回呼び出し、追跡対象のホテル・宿泊条件について現在価格を取得してDBに保存します。`Authorization: Bearer <CRON_SECRET>` が一致しない場合は `401` を返します。`CRON_SECRET` の実値は返しません。
+手動保存API:
+
+```text
+POST /api/price-watch/capture-once
+```
+
+ホテル詳細ページの「今すぐ1回取得して保存」から呼び出し、指定ホテル・宿泊日・人数の現在価格を楽天APIから取得して `hotel_price_snapshots` に保存します。同じ条件を同じ日本日付で保存した場合は、その日のスナップショットを更新します。
+
+Cron APIは後続で自動化する場合のために残していますが、この段階ではVercel Cronの自動実行設定は入れていません。自動保存を有効化する場合は `CRON_SECRET` を設定し、Vercel Cronから `/api/cron/capture-price-snapshots` を呼び出してください。
 
 手動確認手順:
 
 1. NeonやSupabaseなどでPostgreSQL DBを用意する。
-2. `DATABASE_URL` をVercelに設定する。
-3. `CRON_SECRET` をVercelに設定する。
-4. 上記SQLを実行してテーブルを作る。
-5. VercelでRedeployする。
-6. ホテル詳細ページで宿泊日と人数を入力する。
-7. 「この宿泊日の料金推移を記録する」を押す。
-8. `Authorization: Bearer <CRON_SECRET>` 付きで `/api/cron/capture-price-snapshots` を手動実行する。
-9. `/api/hotels/rakuten-78182/price-history?checkIn=2026-08-10&checkOut=2026-08-11&adults=2` を確認する。
-10. 1件以上保存されていれば、詳細ページのグラフに実データが表示される。
+2. 上記SQLを実行してテーブルを作る。
+3. Vercelまたはローカルに `DATABASE_URL` を設定する。
+4. VercelでRedeployする、または `npm run dev` を再起動する。
+5. ホテル詳細ページを開く。
+6. 宿泊日と人数を入力する。
+7. 「この条件を追跡対象に追加」を押す。
+8. 「今すぐ1回取得して保存」を押す。
+9. 「料金推移を表示」を押す。
+10. 実データが1点以上表示されることを確認する。
 
 じゃらんProvider確認:
 

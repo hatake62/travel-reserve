@@ -35,13 +35,14 @@ export default function PriceHistorySection({
   const [history, setHistory] = useState<PriceHistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  async function loadPriceHistory() {
+  async function loadPriceHistory(clearNotice = true) {
     setIsLoading(true);
     setError(null);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
 
     try {
       const params = new URLSearchParams({
@@ -102,7 +103,7 @@ export default function PriceHistorySection({
         throw new Error(data.error ?? "料金推移の記録開始に失敗しました");
       }
       setNotice(
-        "この宿泊日の料金推移を記録対象に追加しました。Cron実行後に実データが追加されます。",
+        "この条件を追跡対象に追加しました。今すぐ保存する場合は、現在価格を1回取得してください。",
       );
     } catch (error) {
       setError(
@@ -112,6 +113,48 @@ export default function PriceHistorySection({
       );
     } finally {
       setIsRegistering(false);
+    }
+  }
+
+  async function captureOnce() {
+    setIsCapturing(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await fetch("/api/price-watch/capture-once", {
+        body: JSON.stringify({
+          hotelId: String(hotelId),
+          checkInDate,
+          checkOutDate,
+          adults,
+        }),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        snapshot?: { price: number | null };
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "現在価格の保存に失敗しました");
+      }
+      setNotice(
+        data.snapshot?.price
+          ? "現在価格を実データとして保存しました。"
+          : "現在価格を保存しました。価格は取得できなかったため、価格未取得として記録しています。",
+      );
+      await loadPriceHistory(false);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "現在価格の保存に失敗しました",
+      );
+    } finally {
+      setIsCapturing(false);
     }
   }
 
@@ -168,21 +211,31 @@ export default function PriceHistorySection({
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <button
           className="h-11 rounded-lg bg-sky-700 px-5 text-sm font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={isLoading || isRegistering}
-          onClick={loadPriceHistory}
+          disabled={isLoading || isRegistering || isCapturing}
+          onClick={() => {
+            void loadPriceHistory();
+          }}
           type="button"
         >
           料金推移を表示
         </button>
         <button
           className="h-11 rounded-lg border border-sky-700 px-5 text-sm font-bold text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
-          disabled={isLoading || isRegistering}
+          disabled={isLoading || isRegistering || isCapturing}
           onClick={registerPriceWatchTarget}
           type="button"
         >
           {isRegistering
             ? "記録対象に追加中..."
-            : "この宿泊日の料金推移を記録する"}
+            : "この条件を追跡対象に追加"}
+        </button>
+        <button
+          className="h-11 rounded-lg border border-amber-600 px-5 text-sm font-bold text-amber-700 transition hover:bg-amber-50 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+          disabled={isLoading || isRegistering || isCapturing}
+          onClick={captureOnce}
+          type="button"
+        >
+          {isCapturing ? "保存中..." : "今すぐ1回取得して保存"}
         </button>
       </div>
 
@@ -207,7 +260,7 @@ export default function PriceHistorySection({
               <PriceHistoryChart points={history.points} />
             ) : (
               <p className="rounded-xl bg-slate-50 p-5 text-sm font-semibold text-slate-600">
-                まだ実データの料金履歴がありません。記録を開始すると、毎日データが追加されます。
+                まだ実データの料金履歴がありません。記録を開始すると、データが追加されます。
               </p>
             )}
           </div>

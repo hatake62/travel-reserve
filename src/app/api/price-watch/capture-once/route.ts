@@ -1,14 +1,14 @@
 import { createApiErrorResponse } from "@/lib/apiError";
+import { fetchRakutenPriceSnapshot } from "@/lib/hotelProviders/rakutenPriceSnapshotProvider";
 import {
-  addTrackedPriceTarget,
-  getPriceWatchTargets,
+  hasPriceHistoryDatabase,
+  savePriceSnapshot,
 } from "@/lib/priceHistoryRepository";
-import type { PriceWatchTarget } from "@/types/priceHistory";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-type PriceWatchTargetRequest = {
+type CaptureOnceRequest = {
   hotelId?: unknown;
   checkInDate?: unknown;
   checkOutDate?: unknown;
@@ -29,14 +29,9 @@ function isCheckOutAfterCheckIn(checkInDate: string, checkOutDate: string): bool
     new Date(`${checkInDate}T00:00:00.000Z`).getTime();
 }
 
-export async function GET() {
-  const { targets, warnings } = await getPriceWatchTargets();
-  return NextResponse.json({ targets, warnings });
-}
-
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as PriceWatchTargetRequest;
+    const body = (await request.json().catch(() => ({}))) as CaptureOnceRequest;
     const hotelId = typeof body.hotelId === "string" ? body.hotelId.trim() : "";
     const checkInDate = body.checkInDate;
     const checkOutDate = body.checkOutDate;
@@ -59,25 +54,56 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (!hasPriceHistoryDatabase()) {
+      return NextResponse.json(
+        createApiErrorResponse(
+          "DATABASE_URLが未設定のため、料金スナップショットを保存できません。",
+          "DB設定とテーブル作成状況を確認してください",
+        ),
+        { status: 503 },
+      );
+    }
 
-    const target: PriceWatchTarget = await addTrackedPriceTarget({
+    const snapshot = await fetchRakutenPriceSnapshot({
       hotelId,
-      provider: "rakuten",
       checkInDate,
       checkOutDate,
       adults: parseAdults(body.adults),
-      enabled: true,
     });
+    const result = await savePriceSnapshot(snapshot);
 
-    return NextResponse.json({ target });
+    if (!result.saved) {
+      return NextResponse.json(
+        createApiErrorResponse(
+          "料金スナップショットを保存できませんでした",
+          result.warnings.join(" / ") || "DB設定を確認してください",
+        ),
+        { status: 503 },
+      );
+    }
+
+    return NextResponse.json({
+      snapshot: {
+        hotelId: snapshot.hotelId,
+        provider: snapshot.provider,
+        checkInDate: snapshot.checkInDate,
+        checkOutDate: snapshot.checkOutDate,
+        adults: snapshot.adults,
+        price: snapshot.price,
+        bookingUrl: snapshot.bookingUrl ?? "",
+        capturedAt: snapshot.capturedAt,
+      },
+      warnings: result.warnings,
+    });
   } catch (error) {
     const message =
-      error instanceof Error
-        ? error.message
-        : "料金推移の記録開始に失敗しました";
+      error instanceof Error ? error.message : "料金スナップショットの保存に失敗しました";
     const status = message.includes("DATABASE_URL") ? 503 : 500;
     return NextResponse.json(
-      createApiErrorResponse(message, "DB設定とテーブル作成状況を確認してください"),
+      createApiErrorResponse(
+        message,
+        "楽天API設定、DB設定、宿泊条件を確認してください",
+      ),
       { status },
     );
   }

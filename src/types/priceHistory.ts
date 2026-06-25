@@ -39,4 +39,5 @@ export type PriceWatchTarget = PriceHistoryParams & {
   provider: PriceSnapshotProvider;
   enabled: boolean;
   createdAt?: string;
+  updatedAt?: string;
 };

@@ -21,6 +21,10 @@ function getDatabaseUrl(): string | undefined {
   return process.env.DATABASE_URL?.trim() || undefined;
 }
 
+export function hasPriceHistoryDatabase(): boolean {
+  return Boolean(getDatabaseUrl());
+}
+
 function getPool(): Pool | null {
   const connectionString = getDatabaseUrl();
   if (!connectionString) return null;
@@ -112,32 +116,66 @@ export async function savePriceSnapshot(
     };
   }
 
-  await db.query(
-    `
-      INSERT INTO hotel_price_snapshots (
-        hotel_id,
-        provider,
-        check_in_date,
-        check_out_date,
-        adults,
-        price,
-        booking_url,
-        captured_at
-      )
-      VALUES ($1, $2, $3::date, $4::date, $5, $6, $7, $8::timestamptz)
-      ON CONFLICT DO NOTHING
-    `,
-    [
-      snapshot.hotelId,
-      snapshot.provider,
-      snapshot.checkInDate,
-      snapshot.checkOutDate,
-      snapshot.adults,
-      snapshot.price,
-      snapshot.bookingUrl ?? "",
-      snapshot.capturedAt,
-    ],
-  );
+  const values = [
+    snapshot.hotelId,
+    snapshot.provider,
+    snapshot.checkInDate,
+    snapshot.checkOutDate,
+    snapshot.adults,
+    snapshot.price,
+    snapshot.bookingUrl ?? "",
+    snapshot.capturedAt,
+  ];
+
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const updateResult = await client.query(
+      `
+        UPDATE hotel_price_snapshots
+        SET
+          price = $6,
+          booking_url = $7,
+          captured_at = $8::timestamptz
+        WHERE hotel_id = $1
+          AND provider = $2
+          AND check_in_date = $3::date
+          AND check_out_date = $4::date
+          AND adults = $5
+          AND (captured_at AT TIME ZONE 'Asia/Tokyo')::date =
+            ($8::timestamptz AT TIME ZONE 'Asia/Tokyo')::date
+      `,
+      values,
+    );
+
+    if (updateResult.rowCount === 0) {
+      await client.query(
+        `
+          INSERT INTO hotel_price_snapshots (
+            hotel_id,
+            provider,
+            check_in_date,
+            check_out_date,
+            adults,
+            price,
+            booking_url,
+            captured_at
+          )
+          VALUES ($1, $2, $3::date, $4::date, $5, $6, $7, $8::timestamptz)
+        `,
+        values,
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    return {
+      saved: false,
+      warnings: [getDatabaseErrorWarning(error)],
+    };
+  } finally {
+    client.release();
+  }
 
   return { saved: true, warnings: [] };
 }
@@ -163,6 +201,12 @@ function mapTargetRow(row: QueryResultRow): PriceWatchTarget {
         : row.created_at === undefined
         ? undefined
         : String(row.created_at),
+    updatedAt:
+      row.updated_at instanceof Date
+        ? row.updated_at.toISOString()
+        : row.updated_at === undefined
+        ? undefined
+        : String(row.updated_at),
   };
 }
 
@@ -191,10 +235,54 @@ export async function getTrackedPriceTargets(): Promise<{
           check_out_date,
           adults,
           enabled,
-          created_at
+          created_at,
+          updated_at
         FROM hotel_price_watch_targets
         WHERE enabled = TRUE
         ORDER BY created_at ASC
+      `,
+    );
+    return {
+      targets: result.rows.map(mapTargetRow),
+      warnings: [],
+    };
+  } catch (error) {
+    return {
+      targets: [],
+      warnings: [getDatabaseErrorWarning(error)],
+    };
+  }
+}
+
+export async function getPriceWatchTargets(): Promise<{
+  targets: PriceWatchTarget[];
+  warnings: string[];
+}> {
+  const db = getPool();
+  if (!db) {
+    return {
+      targets: [],
+      warnings: [
+        "DATABASE_URLが未設定のため、追跡対象を取得できません。",
+      ],
+    };
+  }
+
+  try {
+    const result = await db.query(
+      `
+        SELECT
+          id,
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          enabled,
+          created_at,
+          updated_at
+        FROM hotel_price_watch_targets
+        ORDER BY enabled DESC, created_at DESC
       `,
     );
     return {
@@ -217,38 +305,44 @@ export async function addTrackedPriceTarget(
     throw new Error("DATABASE_URLが未設定のため、料金推移の記録を開始できません。");
   }
 
-  const result = await db.query(
-    `
-      INSERT INTO hotel_price_watch_targets (
-        hotel_id,
-        provider,
-        check_in_date,
-        check_out_date,
-        adults,
-        enabled,
-        updated_at
-      )
-      VALUES ($1, $2, $3::date, $4::date, $5, TRUE, NOW())
-      ON CONFLICT (hotel_id, provider, check_in_date, check_out_date, adults)
-      DO UPDATE SET enabled = TRUE, updated_at = NOW()
-      RETURNING
-        id,
-        hotel_id,
-        provider,
-        check_in_date,
-        check_out_date,
-        adults,
-        enabled,
-        created_at
-    `,
-    [
-      target.hotelId,
-      target.provider,
-      target.checkInDate,
-      target.checkOutDate,
-      target.adults,
-    ],
-  );
+  let result;
+  try {
+    result = await db.query(
+      `
+        INSERT INTO hotel_price_watch_targets (
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          enabled,
+          updated_at
+        )
+        VALUES ($1, $2, $3::date, $4::date, $5, TRUE, NOW())
+        ON CONFLICT (hotel_id, provider, check_in_date, check_out_date, adults)
+        DO UPDATE SET enabled = TRUE, updated_at = NOW()
+        RETURNING
+          id,
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          enabled,
+          created_at,
+          updated_at
+      `,
+      [
+        target.hotelId,
+        target.provider,
+        target.checkInDate,
+        target.checkOutDate,
+        target.adults,
+      ],
+    );
+  } catch (error) {
+    throw new Error(getDatabaseErrorWarning(error));
+  }
 
   return mapTargetRow(result.rows[0]);
 }
