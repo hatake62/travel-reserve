@@ -8,10 +8,8 @@
 
 ## 公開URL
 
-Vercelで公開後、以下にURLを記載します。
-
-- 公開URL: 後で追記
-- GitHubリポジトリ: 後で追記
+- 公開URL: https://travel-reserve.vercel.app/
+- GitHubリポジトリ: https://github.com/hatake62/travel-reserve
 
 ## 作成目的
 
@@ -233,10 +231,12 @@ JALAN_API_KEY=...
 確認する主なURLは次の通りです。
 
 ```text
-https://公開URL/
-https://公開URL/favorites
-https://公開URL/api/hotels
-https://公開URL/api/debug/provider-config
+https://travel-reserve.vercel.app/
+https://travel-reserve.vercel.app/?destination=東京
+https://travel-reserve.vercel.app/hotels/1
+https://travel-reserve.vercel.app/favorites
+https://travel-reserve.vercel.app/api/hotels
+https://travel-reserve.vercel.app/api/debug/provider-config
 ```
 
 ## 環境変数変更後の注意
@@ -244,7 +244,7 @@ https://公開URL/api/debug/provider-config
 - Vercelで環境変数を変更したら再デプロイが必要です。
 - APIキーには `NEXT_PUBLIC_` を付けないでください。
 - APIキーをREADMEやGitHubに書かないでください。
-- まずは `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。
+- 本番環境では、まず `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。仮データで画面とAPIの動作を確認した後、必要に応じて外部API Providerを有効にしてください。
 
 ## 本番公開時の注意事項
 
@@ -281,10 +281,12 @@ http://localhost:3000/api/debug/provider-config
 Vercelへデプロイした後は、公開URLで次のパスを確認します。
 
 ```text
-/
-/favorites
-/api/hotels
-/api/debug/provider-config
+https://travel-reserve.vercel.app/
+https://travel-reserve.vercel.app/?destination=東京
+https://travel-reserve.vercel.app/hotels/1
+https://travel-reserve.vercel.app/favorites
+https://travel-reserve.vercel.app/api/hotels
+https://travel-reserve.vercel.app/api/debug/provider-config
 ```
 
 ## 公開後の動作確認
@@ -374,7 +376,7 @@ http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02
 
 ## スクリーンショット
 
-スクリーンショットは必要に応じて追加予定です。現時点ではREADMEに画像を含めていません。
+スクリーンショットは必要に応じて後から追加予定です。今回はREADMEに画像を含めていません。
 
 ## 既知の制限
 
