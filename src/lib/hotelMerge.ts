@@ -1,4 +1,5 @@
 import type { Hotel, HotelOffer } from "@/types/hotel";
+import { isValidPrice, sortOffersByPrice } from "@/lib/price";
 
 const MIN_NORMALIZED_NAME_LENGTH = 4;
 
@@ -45,9 +46,13 @@ export function isSameHotel(a: Hotel, b: Hotel): boolean {
 }
 
 function compareOfferPrice(a: HotelOffer, b: HotelOffer): number {
-  if (a.price <= 0) return b.price <= 0 ? 0 : 1;
-  if (b.price <= 0) return -1;
-  return a.price - b.price;
+  const priceA = isValidPrice(a.price) ? a.price : null;
+  const priceB = isValidPrice(b.price) ? b.price : null;
+
+  if (priceA === null && priceB === null) return 0;
+  if (priceA === null) return 1;
+  if (priceB === null) return -1;
+  return priceA - priceB;
 }
 
 function mergeOffers(...offerGroups: HotelOffer[][]): HotelOffer[] {
@@ -60,14 +65,14 @@ function mergeOffers(...offerGroups: HotelOffer[][]): HotelOffer[] {
     }
   }
 
-  return [...cheapestBySite.values()].sort(compareOfferPrice);
+  return sortOffersByPrice([...cheapestBySite.values()]);
 }
 
 function informationScore(hotel: Hotel): number {
   return (
     hotel.name.trim().length +
     hotel.area.trim().length +
-    (hotel.imageUrl.trim() ? 20 : 0) +
+    (hotel.imageUrl?.trim() ? 20 : 0) +
     (hotel.rating > 0 ? 5 : 0)
   );
 }
@@ -82,7 +87,7 @@ function mergeHotelPair(current: Hotel, incoming: Hotel): Hotel {
       incoming.area.trim().length > current.area.trim().length
         ? incoming.area
         : current.area,
-    imageUrl: richer.imageUrl.trim()
+    imageUrl: richer.imageUrl?.trim()
       ? richer.imageUrl
       : current.imageUrl || incoming.imageUrl,
     rating: Math.max(current.rating, incoming.rating),

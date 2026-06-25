@@ -2,6 +2,13 @@
 
 import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
 import FavoriteButton from "@/components/FavoriteButton";
+import HotelImage from "@/components/HotelImage";
+import {
+  formatPrice,
+  getLowestValidOffer,
+  isValidPrice,
+  sortOffersByPrice,
+} from "@/lib/price";
 import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
@@ -9,12 +16,6 @@ import { use, useEffect, useState } from "react";
 type HotelDetailPageProps = {
   params: Promise<{ id: string }>;
 };
-
-const yenFormatter = new Intl.NumberFormat("ja-JP", {
-  style: "currency",
-  currency: "JPY",
-  maximumFractionDigits: 0,
-});
 
 export default function HotelDetailPage({
   params,
@@ -56,12 +57,8 @@ export default function HotelDetailPage({
     return <StatusMessage isError message={errorMessage ?? "ホテルが見つかりませんでした"} />;
   }
 
-  const sortedOffers = [...hotel.offers].sort((a, b) => {
-    if (a.price <= 0) return b.price <= 0 ? 0 : 1;
-    if (b.price <= 0) return -1;
-    return a.price - b.price;
-  });
-  const lowestOffer = sortedOffers.find((offer) => offer.price > 0);
+  const sortedOffers = sortOffersByPrice(hotel.offers);
+  const lowestOffer = getLowestValidOffer(sortedOffers);
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 text-slate-900 sm:px-6 sm:py-12">
@@ -75,11 +72,10 @@ export default function HotelDetailPage({
         </Link>
 
         <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div
-            aria-label={`${hotel.name}の客室イメージ`}
-            className="h-64 bg-slate-200 bg-cover bg-center sm:h-96"
-            role="img"
-            style={{ backgroundImage: `url(${hotel.imageUrl})` }}
+          <HotelImage
+            alt={`${hotel.name}の客室イメージ`}
+            src={hotel.imageUrl}
+            variant="detail"
           />
 
           <div className="p-6 sm:p-9">
@@ -111,12 +107,19 @@ export default function HotelDetailPage({
               {lowestOffer ? (
                 <p className="mt-1">
                   <span className="text-4xl font-bold tracking-tight text-slate-950">
-                    {yenFormatter.format(lowestOffer.price)}
+                    {formatPrice(lowestOffer.price)}
                   </span>
                   <span className="ml-2 text-sm text-slate-500">〜 / 1泊</span>
                 </p>
               ) : (
-                <p className="mt-1 text-2xl font-bold text-slate-700">料金未定</p>
+                <div className="mt-2">
+                  <p className="text-2xl font-bold text-slate-700">
+                    価格は予約サイトで確認
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    現在、有効な価格情報は取得できていません。
+                  </p>
+                </div>
               )}
             </section>
 
@@ -133,7 +136,7 @@ export default function HotelDetailPage({
 
               {sortedOffers.length > 0 ? (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="w-full min-w-[850px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
                         <th className="px-5 py-4 font-bold" scope="col">予約サイト</th>
@@ -145,17 +148,24 @@ export default function HotelDetailPage({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {sortedOffers.map((offer, index) => (
-                        <tr className={index === 0 ? "bg-rose-50/50" : "bg-white"} key={`${offer.site}-${offer.roomType}`}>
+                      {sortedOffers.map((offer) => (
+                        <tr
+                          className={
+                            lowestOffer === offer && isValidPrice(offer.price)
+                              ? "bg-rose-50/50"
+                              : "bg-white"
+                          }
+                          key={`${offer.site}-${offer.roomType}`}
+                        >
                           <th className="px-5 py-5 font-bold text-slate-900" scope="row">
                             <div className="flex items-center gap-2">
                               {offer.site}
-                              {index === 0 && (
+                              {lowestOffer === offer && isValidPrice(offer.price) && (
                                 <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">最安値</span>
                               )}
                             </div>
                           </th>
-                          <td className="whitespace-nowrap px-5 py-5 text-lg font-bold text-slate-950">{offer.price > 0 ? yenFormatter.format(offer.price) : "価格不明"}</td>
+                          <td className="whitespace-nowrap px-5 py-5 text-lg font-bold text-slate-950">{formatPrice(offer.price)}</td>
                           <td className="px-5 py-5 text-slate-700">{offer.roomType}</td>
                           <td className="whitespace-nowrap px-5 py-5 text-slate-700">{offer.hasBreakfast ? "朝食あり" : "朝食なし"}</td>
                           <td className="px-5 py-5 text-slate-700">{offer.cancellation}</td>

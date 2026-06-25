@@ -3,6 +3,7 @@
 import HotelCard from "@/components/HotelCard";
 import SearchForm from "@/components/SearchForm";
 import { fetchHotels } from "@/lib/hotelApi";
+import { getLowestValidPrice } from "@/lib/price";
 import {
   DEFAULT_SEARCH_CONDITION,
   searchConditionToParams,
@@ -20,15 +21,6 @@ import {
   useRef,
   useState,
 } from "react";
-
-const getLowestPrice = (hotel: Hotel) =>
-  hotel.offers.reduce<number | undefined>(
-    (lowest, offer) =>
-      offer.price > 0 && (lowest === undefined || offer.price < lowest)
-        ? offer.price
-        : lowest,
-    undefined,
-  );
 
 export default function Home() {
   return (
@@ -133,7 +125,7 @@ function HomeContent() {
         !destination ||
         hotel.name.toLocaleLowerCase("ja").includes(destination) ||
         hotel.area.toLocaleLowerCase("ja").includes(destination);
-      const lowestPrice = getLowestPrice(hotel);
+      const lowestPrice = getLowestValidPrice(hotel.offers);
       const matchesMaxPrice =
         searchCondition.maxPrice === null ||
         (lowestPrice !== undefined && lowestPrice <= searchCondition.maxPrice);
@@ -157,8 +149,8 @@ function HomeContent() {
         searchCondition.sortBy === "priceAsc" ||
         searchCondition.sortBy === "priceDesc"
       ) {
-        const priceA = getLowestPrice(a);
-        const priceB = getLowestPrice(b);
+        const priceA = getLowestValidPrice(a.offers);
+        const priceB = getLowestValidPrice(b.offers);
 
         if (priceA === undefined) return priceB === undefined ? 0 : 1;
         if (priceB === undefined) return -1;
@@ -172,20 +164,22 @@ function HomeContent() {
     });
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-6 sm:py-14">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-9 space-y-4">
+        <header className="mb-8 flex flex-col gap-5 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-3xl">
           <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
             Hotel Price Comparison
           </p>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">
             ぴったりのホテルを、もっと手軽に。
           </h1>
           <p className="max-w-2xl text-base leading-7 text-slate-600">
             目的地と宿泊日を入力して、条件に合うホテルの価格をすばやく比較できます。
           </p>
+          </div>
           <Link
-            className="inline-flex rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 focus:outline-none focus:ring-4 focus:ring-amber-200"
+            className="inline-flex w-fit rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 focus:outline-none focus:ring-4 focus:ring-amber-200"
             href="/favorites"
           >
             ★ お気に入りを見る
@@ -210,7 +204,7 @@ function HomeContent() {
         )}
 
         <section className="mt-12" aria-labelledby="hotel-list-heading">
-          <div className="mb-6 flex items-end justify-between gap-4">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-sky-700">おすすめの宿泊先</p>
               <h2
@@ -224,7 +218,7 @@ function HomeContent() {
               aria-live="polite"
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200"
             >
-              {hotels.length}件中{filteredHotels.length}件を表示中
+              {hotels.length}件中 {filteredHotels.length}件を表示中
             </p>
           </div>
 

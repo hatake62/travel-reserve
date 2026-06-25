@@ -1,6 +1,6 @@
 export type HotelOffer = {
   site: string;
-  price: number;
+  price?: number | null;
   bookingUrl: string;
   roomType: string;
   hasBreakfast: boolean;
@@ -16,6 +16,6 @@ export type Hotel = {
   name: string;
   area: string;
   rating: number;
-  imageUrl: string;
+  imageUrl?: string | null;
   offers: HotelOffer[];
 };

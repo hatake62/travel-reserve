@@ -6,12 +6,11 @@ export const hotels: Hotel[] = [
     name: "東京ベイサイドホテル",
     area: "東京都・東京駅周辺",
     rating: 4.4,
-    imageUrl:
-      "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "",
     offers: [
       {
         site: "楽天トラベル",
-        price: 12800,
+        price: 0,
         bookingUrl: "https://example.com/rakuten/tokyo-bayside",
         roomType: "スタンダードツイン",
         hasBreakfast: true,

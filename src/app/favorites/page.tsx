@@ -44,9 +44,12 @@ export default function FavoritesPage() {
   );
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-6 sm:py-14">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-6xl">
-        <Link className="text-sm font-bold text-sky-700 hover:text-sky-900" href="/">
+        <Link
+          className="inline-flex text-sm font-bold text-sky-700 hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          href="/"
+        >
           ← ホテル一覧へ戻る
         </Link>
         <header className="mb-8 mt-6">
@@ -54,6 +57,9 @@ export default function FavoritesPage() {
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
             お気に入り
           </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+            比較したいホテルを一覧からまとめて確認できます。
+          </p>
         </header>
 
         {isLoading ? (
@@ -71,9 +77,14 @@ export default function FavoritesPage() {
             ))}
           </div>
         ) : (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center font-bold text-slate-700">
-            お気に入りに登録したホテルはまだありません
-          </p>
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+            <p className="font-bold text-slate-800">
+              お気に入りに登録したホテルはまだありません
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              ホテルカードや詳細ページのボタンから追加できます。
+            </p>
+          </div>
         )}
       </div>
     </main>
