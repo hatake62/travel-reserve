@@ -1,20 +1,29 @@
 "use client";
 
-import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
+import ErrorMessage from "@/components/ErrorMessage";
 import FavoriteButton from "@/components/FavoriteButton";
+import HotelImage from "@/components/HotelImage";
+import LoadingState from "@/components/LoadingState";
+import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
+import {
+  formatPrice,
+  getLowestValidOffer,
+  isValidPrice,
+  sortOffersByPrice,
+} from "@/lib/price";
 import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 
 type HotelDetailPageProps = {
   params: Promise<{ id: string }>;
 };
 
-const yenFormatter = new Intl.NumberFormat("ja-JP", {
-  style: "currency",
-  currency: "JPY",
-  maximumFractionDigits: 0,
-});
+type PageError = {
+  message: string;
+  hint?: string;
+  isNotFound?: boolean;
+};
 
 export default function HotelDetailPage({
   params,
@@ -22,7 +31,41 @@ export default function HotelDetailPage({
   const { id } = use(params);
   const [hotel, setHotel] = useState<Hotel | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [error, setError] = useState<PageError | null>(null);
+
+  const loadHotel = useCallback((resetState = true) => {
+    let isActive = true;
+
+    if (resetState) {
+      setIsLoading(true);
+      setError(null);
+    }
+    fetchHotelById(id)
+      .then((data) => {
+        if (isActive) setHotel(data);
+      })
+      .catch((error: unknown) => {
+        if (!isActive) return;
+        const isNotFound = error instanceof HotelApiError && error.status === 404;
+        setError({
+          message: isNotFound
+            ? "ホテルが見つかりませんでした"
+            : error instanceof Error
+            ? error.message
+            : "ホテル情報の取得に失敗しました",
+          hint: error instanceof HotelApiError ? error.hint : undefined,
+          isNotFound,
+        });
+        setHotel(null);
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
 
   useEffect(() => {
     let isActive = true;
@@ -33,11 +76,17 @@ export default function HotelDetailPage({
       })
       .catch((error: unknown) => {
         if (!isActive) return;
-        setErrorMessage(
-          error instanceof HotelApiError && error.status === 404
+        const isNotFound = error instanceof HotelApiError && error.status === 404;
+        setError({
+          message: isNotFound
             ? "ホテルが見つかりませんでした"
+            : error instanceof Error
+            ? error.message
             : "ホテル情報の取得に失敗しました",
-        );
+          hint: error instanceof HotelApiError ? error.hint : undefined,
+          isNotFound,
+        });
+        setHotel(null);
       })
       .finally(() => {
         if (isActive) setIsLoading(false);
@@ -49,19 +98,37 @@ export default function HotelDetailPage({
   }, [id]);
 
   if (isLoading) {
-    return <StatusMessage message="ホテル情報を読み込んでいます…" />;
+    return (
+      <StatusShell>
+        <LoadingState message="ホテル情報を読み込んでいます..." />
+      </StatusShell>
+    );
   }
 
-  if (errorMessage || !hotel) {
-    return <StatusMessage isError message={errorMessage ?? "ホテルが見つかりませんでした"} />;
+  if (error?.isNotFound) {
+    return <DetailNotFound />;
   }
 
-  const sortedOffers = [...hotel.offers].sort((a, b) => {
-    if (a.price <= 0) return b.price <= 0 ? 0 : 1;
-    if (b.price <= 0) return -1;
-    return a.price - b.price;
-  });
-  const lowestOffer = sortedOffers.find((offer) => offer.price > 0);
+  if (error) {
+    return (
+      <StatusShell>
+        <ErrorMessage
+          hint={error.hint}
+          message={error.message}
+          onRetry={() => {
+            loadHotel();
+          }}
+        />
+      </StatusShell>
+    );
+  }
+
+  if (!hotel) {
+    return <DetailNotFound />;
+  }
+
+  const sortedOffers = sortOffersByPrice(hotel.offers);
+  const lowestOffer = getLowestValidOffer(sortedOffers);
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 text-slate-900 sm:px-6 sm:py-12">
@@ -75,11 +142,10 @@ export default function HotelDetailPage({
         </Link>
 
         <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div
-            aria-label={`${hotel.name}の客室イメージ`}
-            className="h-64 bg-slate-200 bg-cover bg-center sm:h-96"
-            role="img"
-            style={{ backgroundImage: `url(${hotel.imageUrl})` }}
+          <HotelImage
+            alt={`${hotel.name}の客室イメージ`}
+            src={hotel.imageUrl}
+            variant="detail"
           />
 
           <div className="p-6 sm:p-9">
@@ -111,12 +177,19 @@ export default function HotelDetailPage({
               {lowestOffer ? (
                 <p className="mt-1">
                   <span className="text-4xl font-bold tracking-tight text-slate-950">
-                    {yenFormatter.format(lowestOffer.price)}
+                    {formatPrice(lowestOffer.price)}
                   </span>
                   <span className="ml-2 text-sm text-slate-500">〜 / 1泊</span>
                 </p>
               ) : (
-                <p className="mt-1 text-2xl font-bold text-slate-700">料金未定</p>
+                <div className="mt-2">
+                  <p className="text-2xl font-bold text-slate-700">
+                    価格は予約サイトで確認
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    現在、有効な価格情報は取得できていません。
+                  </p>
+                </div>
               )}
             </section>
 
@@ -133,7 +206,7 @@ export default function HotelDetailPage({
 
               {sortedOffers.length > 0 ? (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="w-full min-w-[850px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
                         <th className="px-5 py-4 font-bold" scope="col">予約サイト</th>
@@ -145,17 +218,24 @@ export default function HotelDetailPage({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {sortedOffers.map((offer, index) => (
-                        <tr className={index === 0 ? "bg-rose-50/50" : "bg-white"} key={`${offer.site}-${offer.roomType}`}>
+                      {sortedOffers.map((offer) => (
+                        <tr
+                          className={
+                            lowestOffer === offer && isValidPrice(offer.price)
+                              ? "bg-rose-50/50"
+                              : "bg-white"
+                          }
+                          key={`${offer.site}-${offer.roomType}`}
+                        >
                           <th className="px-5 py-5 font-bold text-slate-900" scope="row">
                             <div className="flex items-center gap-2">
                               {offer.site}
-                              {index === 0 && (
+                              {lowestOffer === offer && isValidPrice(offer.price) && (
                                 <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">最安値</span>
                               )}
                             </div>
                           </th>
-                          <td className="whitespace-nowrap px-5 py-5 text-lg font-bold text-slate-950">{offer.price > 0 ? yenFormatter.format(offer.price) : "価格不明"}</td>
+                          <td className="whitespace-nowrap px-5 py-5 text-lg font-bold text-slate-950">{formatPrice(offer.price)}</td>
                           <td className="px-5 py-5 text-slate-700">{offer.roomType}</td>
                           <td className="whitespace-nowrap px-5 py-5 text-slate-700">{offer.hasBreakfast ? "朝食あり" : "朝食なし"}</td>
                           <td className="px-5 py-5 text-slate-700">{offer.cancellation}</td>
@@ -188,24 +268,38 @@ export default function HotelDetailPage({
   );
 }
 
-function StatusMessage({
-  message,
-  isError = false,
-}: {
-  message: string;
-  isError?: boolean;
-}) {
+function StatusShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-16 text-slate-900">
-      <div
-        className={`mx-auto max-w-xl rounded-2xl border bg-white px-6 py-16 text-center shadow-sm ${
-          isError ? "border-rose-200" : "border-slate-200"
-        }`}
-        role={isError ? "alert" : "status"}
-      >
-        <p className="text-lg font-bold text-slate-800">{message}</p>
-        <Link className="mt-5 inline-block font-bold text-sky-700" href="/">
+      <div className="mx-auto max-w-xl">
+        <Link
+          className="mb-6 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          href="/"
+        >
           ホテル一覧へ戻る
+        </Link>
+        {children}
+      </div>
+    </main>
+  );
+}
+
+function DetailNotFound() {
+  return (
+    <main className="min-h-screen bg-slate-50 px-5 py-16 text-slate-900">
+      <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
+        <p className="text-sm font-bold text-sky-700">404 Not Found</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">
+          ページが見つかりません
+        </h1>
+        <p className="mt-4 text-sm leading-6 text-slate-600">
+          指定されたホテル情報は存在しないか、削除された可能性があります。
+        </p>
+        <Link
+          className="mt-7 inline-flex h-11 items-center justify-center rounded-lg bg-sky-700 px-5 text-sm font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          href="/"
+        >
+          トップページへ戻る
         </Link>
       </div>
     </main>

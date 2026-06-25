@@ -1,12 +1,11 @@
 import type { Hotel } from "@/types/hotel";
 import type { HotelSearchParams } from "@/types/search";
+import {
+  getErrorMessageFromResponse,
+  type ApiErrorResponse,
+} from "@/lib/apiError";
 
 const HOTELS_API_PATH = "/api/hotels";
-
-type ApiErrorResponse = {
-  error?: string;
-  message?: string;
-};
 
 export type FetchHotelsOptions = HotelSearchParams & {
   signal?: AbortSignal;
@@ -17,6 +16,7 @@ export class HotelApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly hint?: string,
   ) {
     super(message);
     this.name = "HotelApiError";
@@ -30,11 +30,11 @@ async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   });
 
   if (!response.ok) {
-    const error = (await response.json().catch(() => ({}))) as ApiErrorResponse;
-    throw new HotelApiError(
-      error.error ?? error.message ?? "ホテル情報の取得に失敗しました",
-      response.status,
+    const error = getErrorMessageFromResponse(
+      await response.json().catch(() => ({})),
+      "ホテル情報の取得に失敗しました",
     );
+    throw new HotelApiError(error.error, response.status, error.hint);
   }
 
   return response.json() as Promise<T>;
@@ -73,11 +73,11 @@ export async function fetchHotels({
       signal,
     });
     if (!response.ok) {
-      const error = (await response.json().catch(() => ({}))) as ApiErrorResponse;
-      throw new HotelApiError(
-        error.error ?? error.message ?? "空室情報の取得に失敗しました",
-        response.status,
+      const error = getErrorMessageFromResponse(
+        (await response.json().catch(() => ({}))) as Partial<ApiErrorResponse>,
+        "空室情報の取得に失敗しました",
       );
+      throw new HotelApiError(error.error, response.status, error.hint);
     }
     const notice = response.headers.get("X-Hotel-Search-Notice");
     if (notice) onNotice?.(decodeURIComponent(notice));
