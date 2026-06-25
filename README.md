@@ -347,20 +347,7 @@ http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02
 
 ## スクリーンショット
 
-画像は後から `public/screenshots/` に追加予定です。
-
-| 画面 | 説明 |
-| --- | --- |
-| トップページ | ホテル検索フォームとホテル一覧 |
-| ホテル詳細ページ | 予約サイトごとの料金比較 |
-| お気に入りページ | localStorageに保存したホテル一覧 |
-| エラー表示 | Provider設定ミスやAPI取得失敗時の表示 |
-
-`public/screenshots/top.png` に画像を置いた場合、READMEに以下のように追加できます。
-
-```markdown
-![トップページ](public/screenshots/top.png)
-```
+スクリーンショットは必要に応じて追加予定です。現時点ではREADMEに画像を含めていません。
 
 ## 既知の制限
 
@@ -401,7 +388,7 @@ http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02
 - データベースを使ったユーザーごとのお気に入り保存
 - ログイン機能
 - レビュー・評価情報の充実
-- Vercelなどへのデプロイ
+- 公開後の運用確認
 - テストの追加
 
 ## 注意事項
