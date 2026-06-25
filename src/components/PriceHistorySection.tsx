@@ -34,11 +34,14 @@ export default function PriceHistorySection({
   const [adults, setAdults] = useState(2);
   const [history, setHistory] = useState<PriceHistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function loadPriceHistory() {
     setIsLoading(true);
     setError(null);
+    setNotice(null);
 
     try {
       const params = new URLSearchParams({
@@ -72,6 +75,46 @@ export default function PriceHistorySection({
     }
   }
 
+  async function registerPriceWatchTarget() {
+    setIsRegistering(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await fetch("/api/price-watch/targets", {
+        body: JSON.stringify({
+          hotelId: String(hotelId),
+          checkInDate,
+          checkOutDate,
+          adults,
+        }),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "料金推移の記録開始に失敗しました");
+      }
+      setNotice(
+        "この宿泊日の料金推移を記録対象に追加しました。Cron実行後に実データが追加されます。",
+      );
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "料金推移の記録開始に失敗しました",
+      );
+    } finally {
+      setIsRegistering(false);
+    }
+  }
+
   return (
     <section
       aria-labelledby="price-history-heading"
@@ -90,7 +133,7 @@ export default function PriceHistorySection({
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_120px_auto] md:items-end">
+      <div className="grid gap-4 md:grid-cols-[1fr_1fr_120px] md:items-end">
         <label className="block">
           <span className="text-sm font-bold text-slate-700">チェックイン</span>
           <input
@@ -120,17 +163,35 @@ export default function PriceHistorySection({
             value={adults}
           />
         </label>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <button
           className="h-11 rounded-lg bg-sky-700 px-5 text-sm font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={isLoading}
+          disabled={isLoading || isRegistering}
           onClick={loadPriceHistory}
           type="button"
         >
           料金推移を表示
         </button>
+        <button
+          className="h-11 rounded-lg border border-sky-700 px-5 text-sm font-bold text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+          disabled={isLoading || isRegistering}
+          onClick={registerPriceWatchTarget}
+          type="button"
+        >
+          {isRegistering
+            ? "記録対象に追加中..."
+            : "この宿泊日の料金推移を記録する"}
+        </button>
       </div>
 
       <div className="mt-6">
+        {notice && !error && (
+          <div className="mb-5 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
+            {notice}
+          </div>
+        )}
         {isLoading ? (
           <LoadingState message="料金履歴を読み込んでいます..." />
         ) : error ? (
@@ -146,7 +207,7 @@ export default function PriceHistorySection({
               <PriceHistoryChart points={history.points} />
             ) : (
               <p className="rounded-xl bg-slate-50 p-5 text-sm font-semibold text-slate-600">
-                まだ料金履歴がありません。Cronでスナップショットが保存されると表示されます。
+                まだ実データの料金履歴がありません。記録を開始すると、毎日データが追加されます。
               </p>
             )}
           </div>

@@ -5,28 +5,17 @@ import type {
   PriceHistoryParams,
   PriceHistoryPoint,
   PriceSnapshot,
-  TrackedPriceTarget,
+  PriceWatchTarget,
 } from "@/types/priceHistory";
 
 const DATABASE_URL_MISSING_WARNING =
-  "DATABASE_URLが未設定です。サンプルの料金履歴を表示しています。";
+  "DATABASE_URLが未設定のため、実データの料金履歴を取得できません。";
 
 const providerLabels: Record<string, string> = {
   rakuten: "楽天トラベル",
-  jalan: "じゃらん",
-  mock: "サンプル",
 };
 
 let pool: Pool | null = null;
-const memoryTrackedTargets: TrackedPriceTarget[] = [
-  {
-    hotelId: "rakuten-78182",
-    provider: "rakuten",
-    checkInDate: "2026-08-10",
-    checkOutDate: "2026-08-11",
-    adults: 2,
-  },
-];
 
 function getDatabaseUrl(): string | undefined {
   return process.env.DATABASE_URL?.trim() || undefined;
@@ -49,19 +38,9 @@ function toDateString(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-function createSampleHistory(): PriceHistoryPoint[] {
-  const today = new Date();
-  const basePrice = 7200;
-
-  return Array.from({ length: 8 }, (_, index) => {
-    const capturedAt = new Date(today);
-    capturedAt.setDate(today.getDate() - (7 - index) * 4);
-    return {
-      capturedDate: toDateString(capturedAt),
-      price: index === 2 ? null : basePrice + ((index * 650) % 2600),
-      provider: "サンプル",
-    };
-  });
+function getDatabaseErrorWarning(error: unknown): string {
+  const message = error instanceof Error ? error.message : "不明なDBエラー";
+  return `DB接続またはクエリに失敗したため、実データの料金履歴を取得できません: ${message.slice(0, 120)}`;
 }
 
 function mapHistoryRow(row: QueryResultRow): PriceHistoryPoint {
@@ -83,32 +62,43 @@ export async function getPriceHistory(
   const db = getPool();
   if (!db) {
     return {
-      points: createSampleHistory(),
+      points: [],
       warnings: [DATABASE_URL_MISSING_WARNING],
     };
   }
 
-  const result = await db.query(
-    `
-      SELECT
-        DATE(captured_at) AS captured_date,
-        provider,
-        price
-      FROM hotel_price_snapshots
-      WHERE hotel_id = $1
-        AND check_in_date = $2::date
-        AND check_out_date = $3::date
-        AND adults = $4
-        AND captured_at >= NOW() - INTERVAL '30 days'
-      ORDER BY captured_at ASC
-    `,
-    [params.hotelId, params.checkInDate, params.checkOutDate, params.adults],
-  );
+  try {
+    const result = await db.query(
+      `
+        SELECT
+          DATE(captured_at AT TIME ZONE 'Asia/Tokyo') AS captured_date,
+          provider,
+          price
+        FROM hotel_price_snapshots
+        WHERE hotel_id = $1
+          AND check_in_date = $2::date
+          AND check_out_date = $3::date
+          AND adults = $4
+          AND captured_at >= NOW() - INTERVAL '30 days'
+        ORDER BY captured_at ASC
+      `,
+      [params.hotelId, params.checkInDate, params.checkOutDate, params.adults],
+    );
 
-  return {
-    points: result.rows.map(mapHistoryRow),
-    warnings: [],
-  };
+    const points = result.rows.map(mapHistoryRow);
+    return {
+      points,
+      warnings:
+        points.length === 0
+          ? ["まだこの条件の実データ料金履歴がありません。"]
+          : [],
+    };
+  } catch (error) {
+    return {
+      points: [],
+      warnings: [getDatabaseErrorWarning(error)],
+    };
+  }
 }
 
 export async function savePriceSnapshot(
@@ -152,24 +142,113 @@ export async function savePriceSnapshot(
   return { saved: true, warnings: [] };
 }
 
-export async function getTrackedPriceTargets(): Promise<TrackedPriceTarget[]> {
-  return memoryTrackedTargets;
+function mapTargetRow(row: QueryResultRow): PriceWatchTarget {
+  return {
+    id: row.id === undefined ? undefined : String(row.id),
+    hotelId: String(row.hotel_id),
+    provider: "rakuten",
+    checkInDate:
+      row.check_in_date instanceof Date
+        ? toDateString(row.check_in_date)
+        : String(row.check_in_date),
+    checkOutDate:
+      row.check_out_date instanceof Date
+        ? toDateString(row.check_out_date)
+        : String(row.check_out_date),
+    adults: Number(row.adults),
+    enabled: Boolean(row.enabled),
+    createdAt:
+      row.created_at instanceof Date
+        ? row.created_at.toISOString()
+        : row.created_at === undefined
+        ? undefined
+        : String(row.created_at),
+  };
+}
+
+export async function getTrackedPriceTargets(): Promise<{
+  targets: PriceWatchTarget[];
+  warnings: string[];
+}> {
+  const db = getPool();
+  if (!db) {
+    return {
+      targets: [],
+      warnings: [
+        "DATABASE_URLが未設定のため、追跡対象を取得できません。",
+      ],
+    };
+  }
+
+  try {
+    const result = await db.query(
+      `
+        SELECT
+          id,
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          enabled,
+          created_at
+        FROM hotel_price_watch_targets
+        WHERE enabled = TRUE
+        ORDER BY created_at ASC
+      `,
+    );
+    return {
+      targets: result.rows.map(mapTargetRow),
+      warnings: [],
+    };
+  } catch (error) {
+    return {
+      targets: [],
+      warnings: [getDatabaseErrorWarning(error)],
+    };
+  }
 }
 
 export async function addTrackedPriceTarget(
-  target: TrackedPriceTarget,
-): Promise<TrackedPriceTarget> {
-  if (
-    !memoryTrackedTargets.some(
-      (item) =>
-        item.hotelId === target.hotelId &&
-        item.provider === target.provider &&
-        item.checkInDate === target.checkInDate &&
-        item.checkOutDate === target.checkOutDate &&
-        item.adults === target.adults,
-    )
-  ) {
-    memoryTrackedTargets.push(target);
+  target: PriceWatchTarget,
+): Promise<PriceWatchTarget> {
+  const db = getPool();
+  if (!db) {
+    throw new Error("DATABASE_URLが未設定のため、料金推移の記録を開始できません。");
   }
-  return target;
+
+  const result = await db.query(
+    `
+      INSERT INTO hotel_price_watch_targets (
+        hotel_id,
+        provider,
+        check_in_date,
+        check_out_date,
+        adults,
+        enabled,
+        updated_at
+      )
+      VALUES ($1, $2, $3::date, $4::date, $5, TRUE, NOW())
+      ON CONFLICT (hotel_id, provider, check_in_date, check_out_date, adults)
+      DO UPDATE SET enabled = TRUE, updated_at = NOW()
+      RETURNING
+        id,
+        hotel_id,
+        provider,
+        check_in_date,
+        check_out_date,
+        adults,
+        enabled,
+        created_at
+    `,
+    [
+      target.hotelId,
+      target.provider,
+      target.checkInDate,
+      target.checkOutDate,
+      target.adults,
+    ],
+  );
+
+  return mapTargetRow(result.rows[0]);
 }

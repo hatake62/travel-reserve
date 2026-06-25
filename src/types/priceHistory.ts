@@ -1,4 +1,4 @@
-export type PriceSnapshotProvider = "rakuten" | "jalan" | "mock";
+export type PriceSnapshotProvider = "rakuten";
 
 export type PriceSnapshot = {
   id?: string;
@@ -34,6 +34,9 @@ export type PriceHistoryParams = {
   adults: number;
 };
 
-export type TrackedPriceTarget = PriceHistoryParams & {
+export type PriceWatchTarget = PriceHistoryParams & {
+  id?: string;
   provider: PriceSnapshotProvider;
+  enabled: boolean;
+  createdAt?: string;
 };

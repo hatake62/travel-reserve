@@ -28,15 +28,11 @@ export async function GET(request: Request) {
   let saved = 0;
 
   try {
-    const targets = await getTrackedPriceTargets();
+    const { targets, warnings: targetWarnings } = await getTrackedPriceTargets();
+    warnings.push(...targetWarnings);
 
     for (const target of targets) {
       try {
-        if (target.provider !== "rakuten") {
-          warnings.push(`${target.provider} provider is not supported yet.`);
-          continue;
-        }
-
         const snapshot = await fetchRakutenPriceSnapshot(target);
         captured += 1;
         const result = await savePriceSnapshot(snapshot);

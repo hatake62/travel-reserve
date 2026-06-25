@@ -347,9 +347,12 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 
 - 楽天トラベルAPIから過去の料金履歴を後から直接取得することはできません。
 - このアプリでは、Vercel Cronで毎日現在価格を取得し、PostgreSQLへスナップショットとして保存します。
-- グラフはDBに保存済みの `hotel_price_snapshots` を表示します。
-- データがたまるまではグラフの点数が少ない、または「まだ料金履歴がありません」と表示されます。
-- `DATABASE_URL` が未設定の場合、アプリは落とさず、料金履歴APIは警告付きでサンプルデータを返します。
+- グラフはDBに保存済みの実データ `hotel_price_snapshots` だけを表示します。
+- サンプルデータは返しません。
+- 記録開始前の過去データは存在しません。
+- 最初は1点だけ、日数が経つほどグラフの点数が増えます。
+- 30日後に過去30日分の推移として見られます。
+- `DATABASE_URL` が未設定の場合、アプリは落とさず、料金履歴APIは空配列と警告を返します。
 - 表示価格は取得時点の参考価格です。実際の料金、空室、キャンセル条件、予約条件は楽天トラベル側で確認してください。
 
 必要な環境変数:
@@ -363,10 +366,26 @@ CRON_SECRET=
 
 テーブル設計:
 
-- テーブル名: `hotel_price_snapshots`
+- `hotel_price_watch_targets`: ユーザーが追跡したいホテル・宿泊日・人数条件を保存します。
+- `hotel_price_snapshots`: 毎日取得した実際の料金を保存します。
+
+`hotel_price_watch_targets`:
+
+- `id`: 追跡対象ID
+- `hotel_id`: `rakuten-78182` のようなアプリ内ホテルID
+- `provider`: `rakuten`
+- `check_in_date`: 宿泊開始日
+- `check_out_date`: 宿泊終了日
+- `adults`: 大人人数
+- `enabled`: Cron取得対象にするか
+- `created_at`: DB登録日時
+- `updated_at`: DB更新日時
+
+`hotel_price_snapshots`:
+
 - `id`: スナップショットID
 - `hotel_id`: `rakuten-78182` のようなアプリ内ホテルID
-- `provider`: `rakuten` などのProvider名
+- `provider`: `rakuten`
 - `check_in_date`: 宿泊開始日
 - `check_out_date`: 宿泊終了日
 - `adults`: 大人人数
@@ -387,6 +406,19 @@ CRON_SECRET=
 SQL例:
 
 ```sql
+CREATE TABLE IF NOT EXISTS hotel_price_watch_targets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  hotel_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  check_in_date DATE NOT NULL,
+  check_out_date DATE NOT NULL,
+  adults INTEGER NOT NULL DEFAULT 2,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (hotel_id, provider, check_in_date, check_out_date, adults)
+);
+
 CREATE TABLE IF NOT EXISTS hotel_price_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   hotel_id TEXT NOT NULL,
@@ -410,7 +442,7 @@ ON hotel_price_snapshots (
   check_in_date,
   check_out_date,
   adults,
-  (captured_at::date)
+  ((captured_at AT TIME ZONE 'Asia/Tokyo')::date)
 );
 ```
 
@@ -427,6 +459,19 @@ Cron API:
 ```
 
 Vercel Cronから毎日1回呼び出し、追跡対象のホテル・宿泊条件について現在価格を取得してDBに保存します。`Authorization: Bearer <CRON_SECRET>` が一致しない場合は `401` を返します。`CRON_SECRET` の実値は返しません。
+
+手動確認手順:
+
+1. NeonやSupabaseなどでPostgreSQL DBを用意する。
+2. `DATABASE_URL` をVercelに設定する。
+3. `CRON_SECRET` をVercelに設定する。
+4. 上記SQLを実行してテーブルを作る。
+5. VercelでRedeployする。
+6. ホテル詳細ページで宿泊日と人数を入力する。
+7. 「この宿泊日の料金推移を記録する」を押す。
+8. `Authorization: Bearer <CRON_SECRET>` 付きで `/api/cron/capture-price-snapshots` を手動実行する。
+9. `/api/hotels/rakuten-78182/price-history?checkIn=2026-08-10&checkOut=2026-08-11&adults=2` を確認する。
+10. 1件以上保存されていれば、詳細ページのグラフに実データが表示される。
 
 じゃらんProvider確認:
 
