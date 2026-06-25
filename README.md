@@ -142,24 +142,7 @@ npm run dev
 http://localhost:3000
 ```
 
-## デプロイ方法
-
-Vercelにデプロイする場合は、次の手順で設定します。
-
-1. GitHubで新規リポジトリを作成します。
-2. ローカルリポジトリにremoteを追加します。
-3. `main` ブランチへpushします。
-4. Vercelにログインします。
-5. Add New ProjectからGitHubリポジトリをImportします。
-6. Framework Presetは `Next.js` を選びます。
-7. Install Commandは `npm install` を指定します。
-8. Build Commandは `npm run build` を指定します。
-9. Output Directoryは通常変更しません。
-10. Environment Variablesに `.env.example` と同じキーを登録します。
-11. まずは `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。
-12. 外部APIを使う場合は、Vercel側にもAPIキーを登録します。
-13. Deployを実行します。
-14. 環境変数を変更したら再デプロイが必要です。
+## GitHubへpushする手順
 
 デプロイ前にローカルで次のコマンドが通ることを確認してください。
 
@@ -168,15 +151,29 @@ npm run lint
 npm run build
 ```
 
-GitHubでリポジトリを作成した後は、次のコマンドでpushします。
+GitHubでリポジトリを作成した後、`main` ブランチへpushします。
 
 ```bash
 git add .
-git commit -m "Prepare GitHub and Vercel deployment"
+git commit -m "Finalize project for deployment"
 git remote add origin https://github.com/ユーザー名/リポジトリ名.git
 git branch -M main
 git push -u origin main
 ```
+
+すでにremoteが登録済みの場合は、`git remote add origin ...` は不要です。
+
+## Vercelで公開する手順
+
+1. Vercelにログインします。
+2. Add New Projectを選びます。
+3. GitHubリポジトリをImportします。
+4. Framework Presetは `Next.js` を選びます。
+5. Install Commandは `npm install` を指定します。
+6. Build Commandは `npm run build` を指定します。
+7. Output Directoryは通常変更しません。
+8. Environment Variablesを設定します。
+9. Deployを実行します。
 
 ## Vercel環境変数の設定例
 
@@ -218,6 +215,36 @@ RAKUTEN_TRAVEL_ACCESS_KEY=...
 RAKUTEN_AFFILIATE_ID=
 JALAN_API_KEY=...
 ```
+
+## Vercel公開後の確認項目
+
+公開URLで次の項目を確認します。
+
+- トップページが表示される
+- ホテル一覧が表示される
+- 検索できる
+- ホテル詳細ページを開ける
+- お気に入り登録できる
+- `/favorites` が開ける
+- `/api/hotels` がJSONを返す
+- `/api/debug/provider-config` がAPIキーの値そのものを返していない
+- スマホ幅でも大きく崩れない
+
+確認する主なURLは次の通りです。
+
+```text
+https://公開URL/
+https://公開URL/favorites
+https://公開URL/api/hotels
+https://公開URL/api/debug/provider-config
+```
+
+## 環境変数変更後の注意
+
+- Vercelで環境変数を変更したら再デプロイが必要です。
+- APIキーには `NEXT_PUBLIC_` を付けないでください。
+- APIキーをREADMEやGitHubに書かないでください。
+- まずは `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。
 
 ## 本番公開時の注意事項
 
