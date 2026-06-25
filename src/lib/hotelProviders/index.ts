@@ -44,7 +44,7 @@ function getEnabledProviders(): HotelProvider[] {
   if (process.env.USE_MOCK_HOTELS !== "false") return [mockProvider];
 
   const providers: HotelProvider[] = [];
-  if (isEnabled(process.env.USE_RAKUTEN_PROVIDER, true)) providers.push(rakutenProvider);
+  if (isEnabled(process.env.USE_RAKUTEN_PROVIDER)) providers.push(rakutenProvider);
   if (isEnabled(process.env.USE_JALAN_PROVIDER)) providers.push(jalanProvider);
   return providers;
 }
@@ -73,7 +73,9 @@ export async function getHotelsFromEnabledProviders(
     throw new Error(failures.join(" / "));
   }
   if (failures.length > 0) {
-    options.onNotice?.(`${failures.join(" / ")}。取得できたProviderの結果を表示しています。`);
+    const notice = `${failures.join(" / ")}。取得できたホテル情報を表示しています。`;
+    console.warn(notice);
+    options.onNotice?.(notice);
   }
 
   return mergeHotelsByIdentity(hotels);

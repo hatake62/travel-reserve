@@ -1,5 +1,6 @@
 import type { Hotel } from "@/types/hotel";
 import type { HotelSearchParams } from "@/types/search";
+import { fetchWithProviderTimeout } from "@/lib/providerFetch";
 
 const KEYWORD_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/KeywordHotelSearch/20170426";
@@ -57,8 +58,8 @@ type RakutenCredentials = {
 };
 
 function getCredentials(): RakutenCredentials {
-  const applicationId = process.env.RAKUTEN_TRAVEL_APP_ID;
-  const accessKey = process.env.RAKUTEN_TRAVEL_ACCESS_KEY;
+  const applicationId = process.env.RAKUTEN_TRAVEL_APP_ID?.trim();
+  const accessKey = process.env.RAKUTEN_TRAVEL_ACCESS_KEY?.trim();
 
   if (!applicationId) {
     throw new Error(
@@ -75,7 +76,7 @@ function getCredentials(): RakutenCredentials {
   return {
     applicationId,
     accessKey,
-    affiliateId: process.env.RAKUTEN_AFFILIATE_ID || undefined,
+    affiliateId: process.env.RAKUTEN_AFFILIATE_ID?.trim() || undefined,
   };
 }
 
@@ -220,11 +221,24 @@ async function fetchRakutenHotels(
   params: URLSearchParams,
   mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
 ): Promise<Hotel[]> {
-  const response = await fetch(`${endpoint}?${params.toString()}`, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 300 },
-  });
+  const response = await fetchWithProviderTimeout(
+    `${endpoint}?${params.toString()}`,
+    {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 300 },
+    },
+    { providerName: "楽天トラベル" },
+  );
   const data = (await response.json().catch(() => null)) as RakutenHotelResponse | null;
+
+  if (!data || !isRecord(data)) {
+    if (!response.ok) {
+      throw new Error(
+        `楽天トラベルAPIからホテル情報を取得できませんでした: HTTP ${response.status}`,
+      );
+    }
+    throw new Error("楽天トラベルAPIのレスポンス形式が不正です。");
+  }
 
   if (response.status === 404 && data?.error === "not_found") {
     return [];
@@ -235,7 +249,11 @@ async function fetchRakutenHotels(
     throw new Error(`楽天トラベルAPIからホテル情報を取得できませんでした: ${detail}`);
   }
 
-  return (data.hotels ?? [])
+  if (!Array.isArray(data.hotels)) {
+    throw new Error("楽天トラベルAPIのホテル一覧レスポンス形式が不正です。");
+  }
+
+  return data.hotels
     .map(normalizeRakutenHotelEntry)
     .filter((entry): entry is RakutenHotelEntry => entry !== null)
     .map(mapper)

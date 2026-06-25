@@ -1,5 +1,6 @@
 import type { Hotel } from "@/types/hotel";
 import type { HotelSearchParams } from "@/types/search";
+import { fetchWithProviderTimeout } from "@/lib/providerFetch";
 
 const JALAN_HOTEL_SEARCH_ENDPOINT =
   "http://jws.jalan.net/APIAdvance/HotelSearch/V1/";
@@ -27,7 +28,7 @@ type JalanHotel = {
 };
 
 function getApiKey(): string {
-  const apiKey = process.env.JALAN_API_KEY;
+  const apiKey = process.env.JALAN_API_KEY?.trim();
   if (!apiKey) {
     throw new Error(
       "JALAN_API_KEYが設定されていません。.env.localのAPIキーを確認してください。",
@@ -135,12 +136,13 @@ export function mapJalanHotelToHotel(entry: JalanHotel): Hotel | null {
 }
 
 async function fetchJalanHotels(params: URLSearchParams): Promise<Hotel[]> {
-  const response = await fetch(
+  const response = await fetchWithProviderTimeout(
     `${JALAN_HOTEL_SEARCH_ENDPOINT}?${params.toString()}`,
     {
       headers: { Accept: "application/json" },
       next: { revalidate: 300 },
     },
+    { providerName: "じゃらん" },
   );
   const body = await response.text();
   let data: unknown = null;
@@ -166,6 +168,10 @@ async function fetchJalanHotels(params: URLSearchParams): Promise<Hotel[]> {
     throw new Error(
       `じゃらんAPIからホテル情報を取得できませんでした: ${getXmlValue(body, "Message") || "APIエラー"}`,
     );
+  }
+
+  if (data === null && !/<(?:Results|Hotel|NumberOfResults)(?:\s|>)/i.test(body)) {
+    throw new Error("じゃらんAPIのレスポンス形式が不正です。");
   }
 
   const entries = data === null ? parseJalanXml(body) : findHotelEntries(data);

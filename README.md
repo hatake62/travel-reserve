@@ -103,12 +103,9 @@ npm run dev
 USE_MOCK_HOTELS=true
 USE_RAKUTEN_PROVIDER=false
 USE_JALAN_PROVIDER=false
-
-RAKUTEN_TRAVEL_APP_ID=
-RAKUTEN_TRAVEL_ACCESS_KEY=
-RAKUTEN_AFFILIATE_ID=
-JALAN_API_KEY=
 ```
+
+外部APIを使う場合だけ、必要なAPIキーを追加します。値がないAPIキーは空欄で登録せず、行ごと省略してください。
 
 環境変数の意味は次の通りです。
 
@@ -121,9 +118,9 @@ JALAN_API_KEY=
 - `RAKUTEN_AFFILIATE_ID`: 楽天アフィリエイトIDです。任意項目です。
 - `JALAN_API_KEY`: じゃらんAPIキーです。
 
-現在の実装では、`USE_MOCK_HOTELS` が未設定または `true` の場合は `mockProvider` だけを使用します。外部APIを使う場合は `USE_MOCK_HOTELS=false` にしてください。
+現在の実装では、`USE_MOCK_HOTELS` が未設定または `true` の場合は `mockProvider` だけを使用し、楽天ProviderとじゃらんProviderは呼びません。外部APIを使う場合は `USE_MOCK_HOTELS=false` にしてください。
 
-`USE_MOCK_HOTELS=false` のとき、`USE_RAKUTEN_PROVIDER` が未設定の場合は楽天Providerが有効になります。楽天を使わない場合は `USE_RAKUTEN_PROVIDER=false` を明示してください。
+`USE_MOCK_HOTELS=false` のときは、`USE_RAKUTEN_PROVIDER=true` または `USE_JALAN_PROVIDER=true` を明示したProviderだけを呼びます。複数Providerを有効にした場合、一方が失敗しても、もう一方が成功していればホテル一覧を返します。
 
 APIキーは `.env.local` に記載します。`.env.local` はGitHubに上げないでください。
 
@@ -175,43 +172,49 @@ git push -u origin main
 
 ## Vercel環境変数の設定例
 
-最初に仮データで公開する場合:
+VercelのEnvironment Variablesでは、空欄のAPIキーを登録しないでください。`Value is required.` が出た場合は、空欄の環境変数を削除し、外部APIを使うときだけ実際の値を登録してください。環境変数を変更したらRedeployが必要です。
+
+段階1: 仮データ公開
 
 ```dotenv
 USE_MOCK_HOTELS=true
 USE_RAKUTEN_PROVIDER=false
 USE_JALAN_PROVIDER=false
-
-RAKUTEN_TRAVEL_APP_ID=
-RAKUTEN_TRAVEL_ACCESS_KEY=
-RAKUTEN_AFFILIATE_ID=
-JALAN_API_KEY=
 ```
 
-楽天APIを使う場合:
+段階2: 楽天Providerのみ
 
 ```dotenv
 USE_MOCK_HOTELS=false
 USE_RAKUTEN_PROVIDER=true
 USE_JALAN_PROVIDER=false
 
-RAKUTEN_TRAVEL_APP_ID=...
-RAKUTEN_TRAVEL_ACCESS_KEY=...
-RAKUTEN_AFFILIATE_ID=
-JALAN_API_KEY=
+RAKUTEN_TRAVEL_APP_ID=実際の値
+RAKUTEN_TRAVEL_ACCESS_KEY=実際の値
+RAKUTEN_AFFILIATE_ID=任意
 ```
 
-楽天 + じゃらんを使う場合:
+段階3: じゃらんProviderのみ
+
+```dotenv
+USE_MOCK_HOTELS=false
+USE_RAKUTEN_PROVIDER=false
+USE_JALAN_PROVIDER=true
+
+JALAN_API_KEY=実際の値
+```
+
+段階4: 楽天 + じゃらん
 
 ```dotenv
 USE_MOCK_HOTELS=false
 USE_RAKUTEN_PROVIDER=true
 USE_JALAN_PROVIDER=true
 
-RAKUTEN_TRAVEL_APP_ID=...
-RAKUTEN_TRAVEL_ACCESS_KEY=...
-RAKUTEN_AFFILIATE_ID=
-JALAN_API_KEY=...
+RAKUTEN_TRAVEL_APP_ID=実際の値
+RAKUTEN_TRAVEL_ACCESS_KEY=実際の値
+RAKUTEN_AFFILIATE_ID=任意
+JALAN_API_KEY=実際の値
 ```
 
 ## Vercel公開後の確認項目
@@ -236,12 +239,16 @@ https://travel-reserve.vercel.app/?destination=東京
 https://travel-reserve.vercel.app/hotels/1
 https://travel-reserve.vercel.app/favorites
 https://travel-reserve.vercel.app/api/hotels
+https://travel-reserve.vercel.app/api/hotels?keyword=東京
 https://travel-reserve.vercel.app/api/debug/provider-config
 ```
 
 ## 環境変数変更後の注意
 
 - Vercelで環境変数を変更したら再デプロイが必要です。
+- 値がないAPIキーは登録しないでください。
+- `Value is required.` が出た場合は、空欄の環境変数を削除してください。
+- 外部APIを使うときだけ実際のAPIキーを登録してください。
 - APIキーには `NEXT_PUBLIC_` を付けないでください。
 - APIキーをREADMEやGitHubに書かないでください。
 - 本番環境では、まず `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。仮データで画面とAPIの動作を確認した後、必要に応じて外部API Providerを有効にしてください。
@@ -257,6 +264,7 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 - 実際の予約条件は予約サイトで確認してください。
 - 予約サイトの情報取得は各サービスの利用規約に従ってください。
 - 本番公開時は価格表示に「実際の予約条件は予約サイトで確認してください」などの注意文を入れてください。
+- 一休.comやYahoo!トラベルは現時点では公式APIではなく、アフィリエイトリンク中心に検討してください。
 
 ## 動作確認方法
 
@@ -286,8 +294,38 @@ https://travel-reserve.vercel.app/?destination=東京
 https://travel-reserve.vercel.app/hotels/1
 https://travel-reserve.vercel.app/favorites
 https://travel-reserve.vercel.app/api/hotels
+https://travel-reserve.vercel.app/api/hotels?keyword=東京
 https://travel-reserve.vercel.app/api/debug/provider-config
 ```
+
+## 本番でのProvider確認手順
+
+楽天Provider確認:
+
+1. Vercelで `USE_MOCK_HOTELS=false` を設定する。
+2. `USE_RAKUTEN_PROVIDER=true`、`USE_JALAN_PROVIDER=false` を設定する。
+3. `RAKUTEN_TRAVEL_APP_ID` と `RAKUTEN_TRAVEL_ACCESS_KEY` を設定する。
+4. 必要な場合だけ `RAKUTEN_AFFILIATE_ID` を設定する。
+5. Redeployする。
+6. `https://travel-reserve.vercel.app/api/debug/provider-config` で楽天Providerが有効で、必要なキーが設定済みになっていることを確認する。
+7. `https://travel-reserve.vercel.app/api/hotels?keyword=東京` がJSONを返すことを確認する。
+8. トップページで東京を検索する。
+
+じゃらんProvider確認:
+
+1. Vercelで `USE_MOCK_HOTELS=false` を設定する。
+2. `USE_RAKUTEN_PROVIDER=false`、`USE_JALAN_PROVIDER=true` を設定する。
+3. `JALAN_API_KEY` を設定する。
+4. Redeployする。
+5. `https://travel-reserve.vercel.app/api/debug/provider-config` でじゃらんProviderが有効で、APIキーが設定済みになっていることを確認する。
+6. `https://travel-reserve.vercel.app/api/hotels?keyword=東京` がJSONを返すことを確認する。
+
+楽天 + じゃらん確認:
+
+1. Vercelで `USE_MOCK_HOTELS=false`、`USE_RAKUTEN_PROVIDER=true`、`USE_JALAN_PROVIDER=true` を設定する。
+2. 必要なAPIキーを設定する。
+3. Redeployする。
+4. `/api/debug/provider-config` と `/api/hotels?keyword=東京` を確認する。
 
 ## 公開後の動作確認
 

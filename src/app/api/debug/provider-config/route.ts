@@ -8,7 +8,7 @@ function isEnabled(value: string | undefined, defaultValue = false): boolean {
 export async function GET() {
   try {
     const useMockHotels = process.env.USE_MOCK_HOTELS !== "false";
-    const useRakutenProvider = isEnabled(process.env.USE_RAKUTEN_PROVIDER, true);
+    const useRakutenProvider = isEnabled(process.env.USE_RAKUTEN_PROVIDER);
     const useJalanProvider = isEnabled(process.env.USE_JALAN_PROVIDER);
     const enabledProviders = useMockHotels
       ? ["mockProvider"]
@@ -22,17 +22,17 @@ export async function GET() {
       useRakutenProvider,
       useJalanProvider,
       enabledProviders,
-      hasRakutenTravelAppId: Boolean(process.env.RAKUTEN_TRAVEL_APP_ID),
+      hasRakutenTravelAppId: Boolean(process.env.RAKUTEN_TRAVEL_APP_ID?.trim()),
       hasRakutenTravelAccessKey: Boolean(
-        process.env.RAKUTEN_TRAVEL_ACCESS_KEY,
+        process.env.RAKUTEN_TRAVEL_ACCESS_KEY?.trim(),
       ),
-      hasRakutenAffiliateId: Boolean(process.env.RAKUTEN_AFFILIATE_ID),
-      hasJalanApiKey: Boolean(process.env.JALAN_API_KEY),
+      hasRakutenAffiliateId: Boolean(process.env.RAKUTEN_AFFILIATE_ID?.trim()),
+      hasJalanApiKey: Boolean(process.env.JALAN_API_KEY?.trim()),
       status: enabledProviders.length > 0 ? "ok" : "error",
       hint:
         enabledProviders.length > 0
           ? undefined
-          : ".env.localでUSE_MOCK_HOTELS=trueにするか、USE_RAKUTEN_PROVIDER=trueなどを設定してください",
+          : "USE_MOCK_HOTELS=trueにするか、USE_RAKUTEN_PROVIDER=trueまたはUSE_JALAN_PROVIDER=trueを設定してください",
     });
   } catch (error) {
     console.error("Failed to inspect provider config:", error);

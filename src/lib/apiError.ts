@@ -5,13 +5,16 @@ export type ApiErrorResponse = {
 
 export function getProviderErrorHint(message: string): string | undefined {
   if (message.includes("有効なホテルProviderがありません")) {
-    return ".env.local の設定を確認してください";
+    return "VercelのEnvironment Variablesまたは.env.localを確認し、/api/debug/provider-configで有効なProviderを確認してください";
   }
   if (
     message.includes("RAKUTEN_TRAVEL_") ||
     message.includes("JALAN_API_KEY")
   ) {
-    return "有効にしたProviderのAPIキーが.env.localに設定されているか確認してください";
+    return "有効にしたProviderのAPIキーがVercelのEnvironment Variablesまたは.env.localに設定されているか確認してください。設定後はRedeployが必要です";
+  }
+  if (message.includes("API") || message.includes("Provider")) {
+    return "時間をおいて再試行するか、/api/debug/provider-configでProvider設定を確認してください";
   }
   return undefined;
 }

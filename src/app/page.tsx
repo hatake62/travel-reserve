@@ -257,6 +257,11 @@ function HomeContent() {
             <EmptyState actionLabel="条件をリセット" onAction={handleReset} />
           )}
         </section>
+        <footer className="mt-12 border-t border-slate-200 pt-6">
+          <p className="text-sm leading-6 text-slate-600">
+            表示価格や空室状況は取得タイミングにより変動する場合があります。実際の予約条件は各予約サイトで確認してください。
+          </p>
+        </footer>
       </div>
     </main>
   );
