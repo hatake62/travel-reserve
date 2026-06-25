@@ -38,4 +38,8 @@ export type HotelProviderDebugInfo = {
   rawCount: number;
   mappedCount: number;
   warnings: string[];
+  responseTopLevelKeys?: string[];
+  firstRawHotelKeys?: string[];
+  firstRawHotelHotelKeys?: string[];
+  detectedPattern?: string;
 };

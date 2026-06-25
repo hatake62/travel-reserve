@@ -27,6 +27,7 @@ type RakutenHotelBasicInfo = {
   hotelImageUrl?: string | null;
   hotelThumbnailUrl?: string | null;
   reviewAverage?: number | string | null;
+  hotelSpecial?: string | null;
 };
 
 type RakutenHotelEntry = {
@@ -60,6 +61,11 @@ type RakutenHotelResponse = {
 export type RakutenHotelFetchResult = {
   hotels: Hotel[];
   debug: HotelProviderDebugInfo;
+};
+
+type ExtractedHotelBasicInfo = {
+  basicInfo: RakutenHotelBasicInfo;
+  pattern: string;
 };
 
 function parseRakutenResponse(body: string): RakutenHotelResponse | null {
@@ -98,7 +104,7 @@ export function mapRakutenKeywordHotelToHotel(
     basicInfo.hotelInformationUrl || basicInfo.planListUrl || "";
 
   return {
-    id: Number(basicInfo.hotelNo),
+    id: `rakuten-${basicInfo.hotelNo}`,
     providerIds: { rakuten: String(basicInfo.hotelNo) },
     name: basicInfo.hotelName,
     area: address || entry.hotelDetailInfo?.areaName || "エリア情報なし",
@@ -167,6 +173,87 @@ function getObjectKeys(value: unknown): string[] {
   return isRecord(value) ? Object.keys(value) : [];
 }
 
+function getFirstRecord(value: unknown): Record<string, unknown> | null {
+  if (isRecord(value)) return value;
+  if (!Array.isArray(value)) return null;
+  return value.find(isRecord) ?? null;
+}
+
+function getHotelKeys(value: unknown): string[] {
+  if (!isRecord(value)) return [];
+  return getObjectKeys(getFirstRecord(value.hotel));
+}
+
+function isRakutenHotelBasicInfo(value: unknown): value is RakutenHotelBasicInfo {
+  if (!isRecord(value)) return false;
+  return "hotelNo" in value || "hotelName" in value;
+}
+
+function getBasicInfoValue(value: unknown): RakutenHotelBasicInfo | null {
+  if (isRakutenHotelBasicInfo(value)) return value;
+  if (!Array.isArray(value)) return null;
+  return value.find(isRakutenHotelBasicInfo) ?? null;
+}
+
+function extractHotelBasicInfo(rawHotel: unknown): ExtractedHotelBasicInfo | null {
+  if (!isRecord(rawHotel)) return null;
+
+  const directBasicInfo = getBasicInfoValue(rawHotel.hotelBasicInfo);
+  if (directBasicInfo) {
+    return {
+      basicInfo: directBasicInfo,
+      pattern: Array.isArray(rawHotel.hotelBasicInfo)
+        ? "rawHotel.hotelBasicInfo[0]"
+        : "rawHotel.hotelBasicInfo",
+    };
+  }
+
+  const hotel = rawHotel.hotel;
+  if (isRecord(hotel)) {
+    const nestedBasicInfo = getBasicInfoValue(hotel.hotelBasicInfo);
+    if (nestedBasicInfo) {
+      return {
+        basicInfo: nestedBasicInfo,
+        pattern: Array.isArray(hotel.hotelBasicInfo)
+          ? "rawHotel.hotel.hotelBasicInfo[0]"
+          : "rawHotel.hotel.hotelBasicInfo",
+      };
+    }
+  }
+
+  if (Array.isArray(hotel)) {
+    const firstHotel = hotel[0];
+    if (isRecord(firstHotel)) {
+      const firstBasicInfo = getBasicInfoValue(firstHotel.hotelBasicInfo);
+      if (firstBasicInfo) {
+        return {
+          basicInfo: firstBasicInfo,
+          pattern: Array.isArray(firstHotel.hotelBasicInfo)
+            ? "rawHotel.hotel[0].hotelBasicInfo[0]"
+            : "rawHotel.hotel[0].hotelBasicInfo",
+        };
+      }
+    }
+
+    const hotelWithBasicInfo = hotel.find((item) =>
+      isRecord(item) && getBasicInfoValue(item.hotelBasicInfo),
+    );
+    if (isRecord(hotelWithBasicInfo)) {
+      const foundBasicInfo = getBasicInfoValue(hotelWithBasicInfo.hotelBasicInfo);
+      if (foundBasicInfo) {
+        return {
+          basicInfo: foundBasicInfo,
+          pattern: Array.isArray(hotelWithBasicInfo.hotelBasicInfo)
+            ? "rawHotel.hotel.find(item => item.hotelBasicInfo).hotelBasicInfo[0]"
+            : "rawHotel.hotel.find(item => item.hotelBasicInfo).hotelBasicInfo",
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 function addRoomInfo(
   entry: RakutenHotelEntry,
   value: unknown,
@@ -188,8 +275,9 @@ function mergeRakutenHotelPart(
   entry: RakutenHotelEntry,
   part: Record<string, unknown>,
 ): void {
-  if (isRecord(part.hotelBasicInfo)) {
-    entry.hotelBasicInfo = part.hotelBasicInfo as RakutenHotelBasicInfo;
+  const basicInfo = getBasicInfoValue(part.hotelBasicInfo);
+  if (basicInfo) {
+    entry.hotelBasicInfo = basicInfo;
   }
   if (isRecord(part.hotelDetailInfo)) {
     entry.hotelDetailInfo =
@@ -202,6 +290,10 @@ function normalizeRakutenHotelEntry(value: unknown): RakutenHotelEntry | null {
   if (!isRecord(value)) return null;
 
   const entry: RakutenHotelEntry = {};
+  const extractedBasicInfo = extractHotelBasicInfo(value);
+  if (extractedBasicInfo) {
+    entry.hotelBasicInfo = extractedBasicInfo.basicInfo;
+  }
   mergeRakutenHotelPart(entry, value);
 
   const parts = Array.isArray(value.hotel)
@@ -229,12 +321,14 @@ function createRakutenDebug(
   rawCount: number,
   mappedCount: number,
   warnings: string[],
+  diagnostics: Partial<HotelProviderDebugInfo> = {},
 ): HotelProviderDebugInfo {
   return {
     provider: "rakuten",
     rawCount,
     mappedCount,
     warnings,
+    ...diagnostics,
   };
 }
 
@@ -299,15 +393,24 @@ async function fetchRakutenHotelsWithDebug(
   }
 
   const rawHotels = data.hotels;
-  const normalizedEntries = rawHotels
-    .map(normalizeRakutenHotelEntry)
-    .filter((entry): entry is RakutenHotelEntry => entry !== null);
-  const hotels = normalizedEntries
-    .map(mapper)
+  const extractedInfos = rawHotels.map(extractHotelBasicInfo);
+  const normalizedEntries = rawHotels.flatMap((rawHotel) => {
+    const entry = normalizeRakutenHotelEntry(rawHotel);
+    return entry ? [entry] : [];
+  });
+  const mappedHotels = normalizedEntries.map((entry) => ({
+    entry,
+    hotel: mapper(entry),
+  }));
+  const hotels = mappedHotels
+    .map(({ hotel }) => hotel)
     .filter((hotel): hotel is Hotel => hotel !== null);
   const hotelBasicInfoFound = normalizedEntries.some((entry) =>
     Boolean(entry.hotelBasicInfo),
   );
+  const detectedPattern =
+    extractedInfos.find((info): info is ExtractedHotelBasicInfo => info !== null)
+      ?.pattern ?? "not_detected";
   const warnings: string[] = [];
 
   if (rawHotels.length === 0) {
@@ -320,6 +423,14 @@ async function fetchRakutenHotelsWithDebug(
   if (!hotelBasicInfoFound && rawHotels.length > 0) {
     warnings.push("楽天APIレスポンス内でhotelBasicInfoを検出できませんでした。");
   }
+  const missingHotelNoCount = normalizedEntries.filter(
+    (entry) => !entry.hotelBasicInfo?.hotelNo,
+  ).length;
+  if (missingHotelNoCount > 0) {
+    warnings.push(
+      `hotelNoを取得できないホテル候補が${missingHotelNoCount}件あり、変換対象から外しました。`,
+    );
+  }
 
   const logPayload = {
     status: response.status,
@@ -327,7 +438,9 @@ async function fetchRakutenHotelsWithDebug(
     hotelsIsArray: Array.isArray(data.hotels),
     hotelsLength: rawHotels.length,
     firstHotelKeys: getObjectKeys(rawHotels[0]),
+    firstHotelHotelKeys: getHotelKeys(rawHotels[0]),
     hotelBasicInfoFound,
+    detectedPattern,
   };
   if (warnings.length > 0) {
     console.warn("Rakuten Travel API hotel response diagnostics", logPayload);
@@ -337,7 +450,12 @@ async function fetchRakutenHotelsWithDebug(
 
   return {
     hotels,
-    debug: createRakutenDebug(rawHotels.length, hotels.length, warnings),
+    debug: createRakutenDebug(rawHotels.length, hotels.length, warnings, {
+      responseTopLevelKeys: getObjectKeys(data),
+      firstRawHotelKeys: getObjectKeys(rawHotels[0]),
+      firstRawHotelHotelKeys: getHotelKeys(rawHotels[0]),
+      detectedPattern,
+    }),
   };
 }
 
@@ -443,7 +561,7 @@ export async function getRakutenHotelById(
   id: string | number,
 ): Promise<Hotel | undefined> {
   const params = createRakutenParams(getRakutenCredentials());
-  params.set("hotelNo", String(id));
+  params.set("hotelNo", String(id).replace(/^rakuten-/, ""));
 
   return (await fetchRakutenHotels(HOTEL_DETAIL_ENDPOINT, params))[0];
 }

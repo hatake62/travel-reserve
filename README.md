@@ -322,6 +322,8 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 - `debug.rawCount` が0なら、外部API側が0件を返している。
 - `debug.rawCount` が1以上で `debug.mappedCount` が0なら、外部APIレスポンスからアプリの `Hotel` 型への変換処理に問題がある。
 - `debug.mappedCount` が1以上なら、通常の `/api/hotels?keyword=東京` でも `Hotel[]` が返る。
+- 楽天Providerでは `debug.detectedPattern` で、`hotelBasicInfo` をどのレスポンス構造から検出したか確認できる。
+- `debug.responseTopLevelKeys`、`debug.firstRawHotelKeys`、`debug.firstRawHotelHotelKeys` で、ホテル情報全文を出さずにレスポンス構造だけ確認できる。
 - `debug=true` でもAPIキー、`applicationId`、`accessKey`、`affiliateId` の実値は返さない。
 
 じゃらんProvider確認:
