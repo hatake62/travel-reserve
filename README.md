@@ -139,22 +139,36 @@ http://localhost:3000
 
 Vercelにデプロイする場合は、次の手順で設定します。
 
-1. GitHubにこのリポジトリをpushします。
-2. VercelでGitHubリポジトリをImportします。
-3. Framework Presetは `Next.js` を選びます。
-4. Install Commandは `npm install` を指定します。
-5. Build Commandは `npm run build` を指定します。
-6. Output Directoryは通常変更しません。
-7. Environment Variablesに `.env.example` と同じキーを登録します。
-8. まずは `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。
-9. 外部APIを使う場合は、Vercel側にもAPIキーを登録します。
-10. 環境変数を変更したら再デプロイが必要です。
+1. GitHubで新規リポジトリを作成します。
+2. ローカルリポジトリにremoteを追加します。
+3. `main` ブランチへpushします。
+4. Vercelにログインします。
+5. Add New ProjectからGitHubリポジトリをImportします。
+6. Framework Presetは `Next.js` を選びます。
+7. Install Commandは `npm install` を指定します。
+8. Build Commandは `npm run build` を指定します。
+9. Output Directoryは通常変更しません。
+10. Environment Variablesに `.env.example` と同じキーを登録します。
+11. まずは `USE_MOCK_HOTELS=true` で公開確認するのがおすすめです。
+12. 外部APIを使う場合は、Vercel側にもAPIキーを登録します。
+13. Deployを実行します。
+14. 環境変数を変更したら再デプロイが必要です。
 
 デプロイ前にローカルで次のコマンドが通ることを確認してください。
 
 ```bash
 npm run lint
 npm run build
+```
+
+GitHubでリポジトリを作成した後は、次のコマンドでpushします。
+
+```bash
+git add .
+git commit -m "Prepare GitHub and Vercel deployment"
+git remote add origin https://github.com/ユーザー名/リポジトリ名.git
+git branch -M main
+git push -u origin main
 ```
 
 ## Vercel環境変数の設定例
@@ -205,6 +219,8 @@ JALAN_API_KEY=...
 - ブラウザ側から直接予約サイトAPIを呼ばないでください。
 - 外部APIはRoute Handler経由で呼んでください。
 - `.env.local` はGitHubにpushしないでください。
+- 価格や空室状況は変動する可能性があります。
+- 実際の予約条件は予約サイトで確認してください。
 - 予約サイトの情報取得は各サービスの利用規約に従ってください。
 - 本番公開時は価格表示に「実際の予約条件は予約サイトで確認してください」などの注意文を入れてください。
 
@@ -226,6 +242,15 @@ JALAN_API_KEY=...
 ```text
 http://localhost:3000/api/hotels?keyword=東京
 http://localhost:3000/api/debug/provider-config
+```
+
+Vercelへデプロイした後は、公開URLで次のパスを確認します。
+
+```text
+/
+/favorites
+/api/hotels
+/api/debug/provider-config
 ```
 
 ## API連携について
