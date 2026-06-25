@@ -4,6 +4,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import LoadingState from "@/components/LoadingState";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
 import type { PriceHistoryResponse } from "@/types/priceHistory";
+import Link from "next/link";
 import { useState } from "react";
 
 type PriceHistorySectionProps = {
@@ -174,6 +175,12 @@ export default function PriceHistorySection({
         <p className="mt-2 text-sm leading-6 text-slate-600">
           毎日保存した料金スナップショットから推移を表示します。表示価格は取得時点の参考価格です。
         </p>
+        <Link
+          className="mt-3 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          href="/price-watch"
+        >
+          追跡中一覧を見る
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_120px] md:items-end">

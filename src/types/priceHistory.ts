@@ -41,3 +41,25 @@ export type PriceWatchTarget = PriceHistoryParams & {
   createdAt?: string;
   updatedAt?: string;
 };
+
+export type PriceCaptureLog = {
+  id?: string;
+  startedAt: string;
+  finishedAt?: string;
+  targetCount: number;
+  successCount: number;
+  failureCount: number;
+  skippedCount: number;
+  message?: string;
+};
+
+export type PriceCaptureLogItemStatus = "success" | "failure" | "skipped";
+
+export type PriceCaptureLogItem = PriceHistoryParams & {
+  id?: string;
+  captureLogId: string;
+  targetId?: string;
+  provider: PriceSnapshotProvider;
+  status: PriceCaptureLogItemStatus;
+  message?: string;
+};

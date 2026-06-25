@@ -2,11 +2,15 @@ import "server-only";
 
 import { Pool, type QueryResultRow } from "pg";
 import type {
+  PriceCaptureLog,
+  PriceCaptureLogItem,
   PriceHistoryParams,
   PriceHistoryPoint,
   PriceSnapshot,
   PriceWatchTarget,
 } from "@/types/priceHistory";
+
+export const MAX_ENABLED_PRICE_WATCH_TARGETS = 10;
 
 const DATABASE_URL_MISSING_WARNING =
   "DATABASE_URLが未設定のため、実データの料金履歴を取得できません。";
@@ -210,6 +214,30 @@ function mapTargetRow(row: QueryResultRow): PriceWatchTarget {
   };
 }
 
+function mapCaptureLogRow(row: QueryResultRow): PriceCaptureLog {
+  return {
+    id: row.id === undefined ? undefined : String(row.id),
+    startedAt:
+      row.started_at instanceof Date
+        ? row.started_at.toISOString()
+        : String(row.started_at),
+    finishedAt:
+      row.finished_at instanceof Date
+        ? row.finished_at.toISOString()
+        : row.finished_at === undefined || row.finished_at === null
+        ? undefined
+        : String(row.finished_at),
+    targetCount: Number(row.target_count),
+    successCount: Number(row.success_count),
+    failureCount: Number(row.failure_count),
+    skippedCount: Number(row.skipped_count),
+    message:
+      row.message === undefined || row.message === null
+        ? undefined
+        : String(row.message),
+  };
+}
+
 export async function getTrackedPriceTargets(): Promise<{
   targets: PriceWatchTarget[];
   warnings: string[];
@@ -241,6 +269,54 @@ export async function getTrackedPriceTargets(): Promise<{
         WHERE enabled = TRUE
         ORDER BY created_at ASC
       `,
+    );
+    return {
+      targets: result.rows.map(mapTargetRow),
+      warnings: [],
+    };
+  } catch (error) {
+    return {
+      targets: [],
+      warnings: [getDatabaseErrorWarning(error)],
+    };
+  }
+}
+
+export async function getEnabledPriceWatchTargets(
+  limit = MAX_ENABLED_PRICE_WATCH_TARGETS,
+): Promise<{
+  targets: PriceWatchTarget[];
+  warnings: string[];
+}> {
+  const db = getPool();
+  if (!db) {
+    return {
+      targets: [],
+      warnings: [
+        "DATABASE_URLが未設定のため、追跡対象を取得できません。",
+      ],
+    };
+  }
+
+  try {
+    const result = await db.query(
+      `
+        SELECT
+          id,
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          enabled,
+          created_at,
+          updated_at
+        FROM hotel_price_watch_targets
+        WHERE enabled = TRUE
+        ORDER BY created_at ASC
+        LIMIT $1
+      `,
+      [Math.max(1, Math.min(limit, MAX_ENABLED_PRICE_WATCH_TARGETS))],
     );
     return {
       targets: result.rows.map(mapTargetRow),
@@ -307,6 +383,54 @@ export async function addTrackedPriceTarget(
 
   let result;
   try {
+    const existingResult = await db.query(
+      `
+        SELECT
+          id,
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          enabled,
+          created_at,
+          updated_at
+        FROM hotel_price_watch_targets
+        WHERE hotel_id = $1
+          AND provider = $2
+          AND check_in_date = $3::date
+          AND check_out_date = $4::date
+          AND adults = $5
+        LIMIT 1
+      `,
+      [
+        target.hotelId,
+        target.provider,
+        target.checkInDate,
+        target.checkOutDate,
+        target.adults,
+      ],
+    );
+
+    if (
+      existingResult.rowCount === 0 ||
+      existingResult.rows[0]?.enabled === false
+    ) {
+      const countResult = await db.query(
+        `
+          SELECT COUNT(*)::int AS enabled_count
+          FROM hotel_price_watch_targets
+          WHERE enabled = TRUE
+        `,
+      );
+      const enabledCount = Number(countResult.rows[0]?.enabled_count ?? 0);
+      if (enabledCount >= MAX_ENABLED_PRICE_WATCH_TARGETS) {
+        throw new Error(
+          "追跡対象の上限は10件です。不要な追跡を停止してから追加してください。",
+        );
+      }
+    }
+
     result = await db.query(
       `
         INSERT INTO hotel_price_watch_targets (
@@ -345,4 +469,208 @@ export async function addTrackedPriceTarget(
   }
 
   return mapTargetRow(result.rows[0]);
+}
+
+export async function disablePriceWatchTarget(
+  id: string,
+  enabled: boolean,
+): Promise<PriceWatchTarget | null> {
+  const db = getPool();
+  if (!db) {
+    throw new Error("DATABASE_URLが未設定のため、追跡対象を更新できません。");
+  }
+
+  try {
+    if (enabled) {
+      const targetResult = await db.query(
+        `
+          SELECT enabled
+          FROM hotel_price_watch_targets
+          WHERE id = $1::uuid
+          LIMIT 1
+        `,
+        [id],
+      );
+      if (targetResult.rowCount === 0) return null;
+      if (!targetResult.rows[0]?.enabled) {
+        const countResult = await db.query(
+          `
+            SELECT COUNT(*)::int AS enabled_count
+            FROM hotel_price_watch_targets
+            WHERE enabled = TRUE
+          `,
+        );
+        const enabledCount = Number(countResult.rows[0]?.enabled_count ?? 0);
+        if (enabledCount >= MAX_ENABLED_PRICE_WATCH_TARGETS) {
+          throw new Error(
+            "追跡対象の上限は10件です。不要な追跡を停止してから追加してください。",
+          );
+        }
+      }
+    }
+
+    const result = await db.query(
+      `
+        UPDATE hotel_price_watch_targets
+        SET enabled = $2, updated_at = NOW()
+        WHERE id = $1::uuid
+        RETURNING
+          id,
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          enabled,
+          created_at,
+          updated_at
+      `,
+      [id, enabled],
+    );
+    return result.rowCount === 0 ? null : mapTargetRow(result.rows[0]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("追跡対象の上限")) {
+      throw error;
+    }
+    throw new Error(getDatabaseErrorWarning(error));
+  }
+}
+
+export async function createCaptureLog(input: {
+  startedAt?: string;
+  targetCount: number;
+  successCount?: number;
+  failureCount?: number;
+  skippedCount?: number;
+  message?: string;
+}): Promise<PriceCaptureLog | null> {
+  const db = getPool();
+  if (!db) return null;
+
+  try {
+    const result = await db.query(
+      `
+        INSERT INTO hotel_price_capture_logs (
+          started_at,
+          target_count,
+          success_count,
+          failure_count,
+          skipped_count,
+          message
+        )
+        VALUES ($1::timestamptz, $2, $3, $4, $5, $6)
+        RETURNING
+          id,
+          started_at,
+          finished_at,
+          target_count,
+          success_count,
+          failure_count,
+          skipped_count,
+          message
+      `,
+      [
+        input.startedAt ?? new Date().toISOString(),
+        input.targetCount,
+        input.successCount ?? 0,
+        input.failureCount ?? 0,
+        input.skippedCount ?? 0,
+        input.message ?? "",
+      ],
+    );
+    return mapCaptureLogRow(result.rows[0]);
+  } catch {
+    return null;
+  }
+}
+
+export async function updateCaptureLog(
+  id: string,
+  input: {
+    finishedAt?: string;
+    targetCount?: number;
+    successCount?: number;
+    failureCount?: number;
+    skippedCount?: number;
+    message?: string;
+  },
+): Promise<PriceCaptureLog | null> {
+  const db = getPool();
+  if (!db) return null;
+
+  try {
+    const result = await db.query(
+      `
+        UPDATE hotel_price_capture_logs
+        SET
+          finished_at = $2::timestamptz,
+          target_count = COALESCE($3, target_count),
+          success_count = COALESCE($4, success_count),
+          failure_count = COALESCE($5, failure_count),
+          skipped_count = COALESCE($6, skipped_count),
+          message = COALESCE($7, message)
+        WHERE id = $1::uuid
+        RETURNING
+          id,
+          started_at,
+          finished_at,
+          target_count,
+          success_count,
+          failure_count,
+          skipped_count,
+          message
+      `,
+      [
+        id,
+        input.finishedAt ?? new Date().toISOString(),
+        input.targetCount ?? null,
+        input.successCount ?? null,
+        input.failureCount ?? null,
+        input.skippedCount ?? null,
+        input.message ?? null,
+      ],
+    );
+    return result.rowCount === 0 ? null : mapCaptureLogRow(result.rows[0]);
+  } catch {
+    return null;
+  }
+}
+
+export async function createCaptureLogItem(
+  input: PriceCaptureLogItem,
+): Promise<void> {
+  const db = getPool();
+  if (!db) return;
+
+  try {
+    await db.query(
+      `
+        INSERT INTO hotel_price_capture_log_items (
+          capture_log_id,
+          target_id,
+          hotel_id,
+          provider,
+          check_in_date,
+          check_out_date,
+          adults,
+          status,
+          message
+        )
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9)
+      `,
+      [
+        input.captureLogId,
+        input.targetId ?? null,
+        input.hotelId,
+        input.provider,
+        input.checkInDate,
+        input.checkOutDate,
+        input.adults,
+        input.status,
+        input.message ?? "",
+      ],
+    );
+  } catch {
+    // Capture log item failures should not fail the price capture itself.
+  }
 }

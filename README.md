@@ -347,11 +347,13 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 
 - 楽天トラベルAPIから過去の料金履歴を後から直接取得することはできません。
 - このアプリでは、楽天APIで取得したその時点の価格をPostgreSQLへスナップショットとして保存します。
+- 第2段階では、Vercel Cronで毎日1回、追跡対象の現在価格を自動保存します。
 - グラフはDBに保存済みの実データ `hotel_price_snapshots` だけを表示します。
 - サンプルデータは返しません。
 - 記録開始前の過去データは存在しません。
 - 最初は1点だけ、日数が経つほどグラフの点数が増えます。
 - 30日後に過去30日分の推移として見られます。
+- 追跡対象は個人開発の運用コストを抑えるため最大10件です。
 - `DATABASE_URL` が未設定の場合、アプリは落とさず、料金履歴APIは空配列と警告を返します。
 - 表示価格は取得時点の参考価格です。実際の料金、空室、キャンセル条件、予約条件は楽天トラベル側で確認してください。
 
@@ -362,12 +364,14 @@ DATABASE_URL=
 CRON_SECRET=
 ```
 
-`DATABASE_URL` はNeonやSupabaseなど、PostgreSQLに接続できるURLを設定します。`CRON_SECRET` は後続でCron自動保存を有効化する場合に使う任意の秘密文字列です。どちらも実値を画面、ログ、APIレスポンス、READMEに出さないでください。Vercelで環境変数を変更した後はRedeployが必要です。
+`DATABASE_URL` はNeonやSupabaseなど、PostgreSQLに接続できるURLを設定します。`CRON_SECRET` はCron自動取得APIを保護するための秘密文字列です。どちらも実値を画面、ログ、APIレスポンス、READMEに出さないでください。Vercelで環境変数を変更した後はRedeployが必要です。
 
 テーブル設計:
 
 - `hotel_price_watch_targets`: ユーザーが追跡したいホテル・宿泊日・人数条件を保存します。
 - `hotel_price_snapshots`: 毎日取得した実際の料金を保存します。
+- `hotel_price_capture_logs`: Cron実行の集計結果を保存します。
+- `hotel_price_capture_log_items`: targetごとの成功・失敗・スキップ概要を保存します。
 
 `hotel_price_watch_targets`:
 
@@ -392,6 +396,18 @@ CRON_SECRET=
 - `price`: 取得時点の価格。取得できない場合は `NULL`
 - `booking_url`: 予約ページURL
 - `captured_at`: 価格を取得した日時
+- `created_at`: DB登録日時
+
+`hotel_price_capture_logs`:
+
+- `id`: 実行ログID
+- `started_at`: 実行開始日時
+- `finished_at`: 実行終了日時
+- `target_count`: 対象件数
+- `success_count`: 成功件数
+- `failure_count`: 失敗件数
+- `skipped_count`: スキップ件数
+- `message`: 実行概要
 - `created_at`: DB登録日時
 
 ユニーク制約の推奨:
@@ -444,6 +460,32 @@ ON hotel_price_snapshots (
   adults,
   ((captured_at AT TIME ZONE 'Asia/Tokyo')::date)
 );
+
+CREATE TABLE IF NOT EXISTS hotel_price_capture_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ,
+  target_count INTEGER NOT NULL DEFAULT 0,
+  success_count INTEGER NOT NULL DEFAULT 0,
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  skipped_count INTEGER NOT NULL DEFAULT 0,
+  message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS hotel_price_capture_log_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  capture_log_id UUID REFERENCES hotel_price_capture_logs(id) ON DELETE CASCADE,
+  target_id UUID,
+  hotel_id TEXT,
+  provider TEXT,
+  check_in_date DATE,
+  check_out_date DATE,
+  adults INTEGER,
+  status TEXT NOT NULL,
+  message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 ```
 
 料金履歴API:
@@ -457,6 +499,7 @@ ON hotel_price_snapshots (
 ```text
 GET /api/price-watch/targets
 POST /api/price-watch/targets
+PATCH /api/price-watch/targets/:id
 ```
 
 手動保存API:
@@ -467,7 +510,22 @@ POST /api/price-watch/capture-once
 
 ホテル詳細ページの「今すぐ1回取得して保存」から呼び出し、指定ホテル・宿泊日・人数の現在価格を楽天APIから取得して `hotel_price_snapshots` に保存します。同じ条件を同じ日本日付で保存した場合は、その日のスナップショットを更新します。
 
-Cron APIは後続で自動化する場合のために残していますが、この段階ではVercel Cronの自動実行設定は入れていません。自動保存を有効化する場合は `CRON_SECRET` を設定し、Vercel Cronから `/api/cron/capture-price-snapshots` を呼び出してください。
+Cron API:
+
+```text
+GET /api/cron/capture-price-snapshots
+POST /api/cron/capture-price-snapshots
+```
+
+Vercel Cronが毎日1回呼び出し、`enabled=true` の追跡対象を最大10件取得して現在価格を保存します。`Authorization: Bearer <CRON_SECRET>` が一致しない場合は `401`、`CRON_SECRET` 未設定時は `500` を返します。Vercel CronはUTC基準です。`0 15 * * *` は日本時間の深夜0時頃です。Hobbyプランでは1日1回実行にしてください。
+
+追跡対象管理:
+
+```text
+/price-watch
+```
+
+登録済みの追跡対象、enabled状態、最終更新日を確認できます。不要な追跡は停止できます。
 
 手動確認手順:
 
@@ -481,6 +539,31 @@ Cron APIは後続で自動化する場合のために残していますが、こ
 8. 「今すぐ1回取得して保存」を押す。
 9. 「料金推移を表示」を押す。
 10. 実データが1点以上表示されることを確認する。
+
+Cron手動確認手順:
+
+1. `CRON_SECRET` を `.env.local` またはVercelに設定する。
+2. `npm run dev` を再起動する、またはVercelでRedeployする。
+3. 追跡対象を1件登録する。
+4. Authorizationヘッダー付きで `/api/cron/capture-price-snapshots` を手動実行する。
+5. `hotel_price_snapshots` に保存されたことを確認する。
+6. 料金推移グラフに実データが表示されることを確認する。
+
+ローカル確認例:
+
+```bash
+curl -X GET http://localhost:3000/api/cron/capture-price-snapshots \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+
+本番確認例:
+
+```bash
+curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+
+`YOUR_CRON_SECRET` はプレースホルダです。実値をREADMEやGitHubに書かないでください。
 
 じゃらんProvider確認:
 
