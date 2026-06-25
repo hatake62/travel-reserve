@@ -1,196 +1,246 @@
-# travel-reserve
+# ホテル価格比較サイト
 
-Next.js、TypeScript、Tailwind CSSで構築したホテル料金比較アプリです。
+## 概要
 
-## ローカル開発
+複数のホテル予約サイトの料金を比較できるWebアプリです。Googleホテルのようなメタサーチ型のホテル比較サイトを目指しており、ホテル一覧・詳細画面で予約サイトごとの料金を比較できます。
 
-環境変数のひな形をコピーして `.env.local` を作成します。
+現在は仮データ、楽天トラベルAPI、じゃらんAPIに対応できる構成です。アプリ内で予約処理は行わず、実際の予約は外部予約サイトへ遷移して行う想定です。
 
-```bash
-cp .env.example .env.local
+## 作成目的
+
+- Next.jsを用いたWebアプリ開発の学習
+- 外部API連携の学習
+- 複数Providerのデータ統合の学習
+- ユーザーがホテル料金を比較しやすいUIの実装
+
+## 主な機能
+
+- ホテル一覧表示
+- ホテル詳細表示
+- 目的地・日付・人数による検索
+- 並び替え
+- 上限価格フィルター
+- 予約サイトフィルター
+- 朝食ありフィルター
+- 複数予約サイトの料金比較表示
+- 最安値表示
+- お気に入り登録
+- お気に入り一覧
+- localStorageによるお気に入り保存
+- 検索条件のURLクエリ反映
+- ホテル画像がない場合の代替表示
+- ローディング・エラー・0件表示
+- Provider設定確認API
+
+## 使用技術
+
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- Route Handler
+- localStorage
+- 楽天トラベルAPI
+- じゃらんAPI
+
+## ディレクトリ構成
+
+```text
+src/
+├─ app/
+│  ├─ api/
+│  │  ├─ areas/
+│  │  ├─ debug/provider-config/
+│  │  └─ hotels/
+│  │     └─ [id]/
+│  ├─ favorites/
+│  ├─ hotels/[id]/
+│  ├─ page.tsx
+│  ├─ layout.tsx
+│  ├─ error.tsx
+│  ├─ not-found.tsx
+│  └─ globals.css
+├─ components/
+├─ data/
+├─ lib/
+│  └─ hotelProviders/
+└─ types/
 ```
 
-`.env.local` の値を用途に合わせて設定します。
+主な役割は次の通りです。
+
+- `src/app/`: 画面、レイアウト、Route Handler
+- `src/app/api/hotels/`: ホテル一覧取得API
+- `src/app/api/hotels/[id]/`: ホテル詳細取得API
+- `src/app/api/areas/`: 地区候補取得API
+- `src/app/api/debug/provider-config/`: Provider設定確認API
+- `src/components/`: 検索フォーム、ホテルカード、画像、状態表示などのUI部品
+- `src/data/`: 仮データ
+- `src/lib/`: API取得、検索条件、価格表示、名寄せ、お気に入りなどの処理
+- `src/lib/hotelProviders/`: Providerごとのホテル取得処理
+- `src/types/`: アプリ共通の型定義
+
+## 環境構築
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+`.env.local` を作成し、利用するProviderに合わせて環境変数を設定してください。
+
+## 環境変数
+
+`.env.local` の例です。
 
 ```dotenv
+USE_MOCK_HOTELS=true
+USE_RAKUTEN_PROVIDER=false
+USE_JALAN_PROVIDER=false
+
 RAKUTEN_TRAVEL_APP_ID=
 RAKUTEN_TRAVEL_ACCESS_KEY=
 RAKUTEN_AFFILIATE_ID=
 JALAN_API_KEY=
-USE_MOCK_HOTELS=true
-USE_RAKUTEN_PROVIDER=true
-USE_JALAN_PROVIDER=false
 ```
 
-- `USE_MOCK_HOTELS=true`: ホテルと地区候補の仮データを使用します。APIキーは不要です。
-- `USE_MOCK_HOTELS=false`: 有効にした外部Providerを使用します。
-- `USE_RAKUTEN_PROVIDER=true`: 楽天トラベルProviderを使用します。楽天ウェブサービスで取得した `RAKUTEN_TRAVEL_APP_ID` と `RAKUTEN_TRAVEL_ACCESS_KEY` が必要です。
-- `USE_JALAN_PROVIDER=true`: じゃらんProviderを使用します。じゃらんWebサービスで取得した `JALAN_API_KEY` が必要です。
-- `RAKUTEN_AFFILIATE_ID`: 任意です。設定した場合は楽天APIが返すURLに反映されます。
+環境変数の意味は次の通りです。
 
-`USE_MOCK_HOTELS=true` は外部Provider設定より優先され、mockProviderだけを使用します。外部APIを使う場合は `USE_MOCK_HOTELS=false` にしてください。
+- `USE_MOCK_HOTELS=true`: 仮データを使います。APIキーなしで動作確認できます。
+- `USE_MOCK_HOTELS=false`: 外部API Providerを使います。
+- `USE_RAKUTEN_PROVIDER=true`: 楽天Providerを使います。
+- `USE_JALAN_PROVIDER=true`: じゃらんProviderを使います。
+- `RAKUTEN_TRAVEL_APP_ID`: 楽天トラベルAPIのアプリIDです。
+- `RAKUTEN_TRAVEL_ACCESS_KEY`: 楽天トラベルAPIのアクセスキーです。
+- `RAKUTEN_AFFILIATE_ID`: 楽天アフィリエイトIDです。任意項目です。
+- `JALAN_API_KEY`: じゃらんAPIキーです。
 
-開発サーバーを起動します。
+現在の実装では、`USE_MOCK_HOTELS` が未設定または `true` の場合は `mockProvider` だけを使用します。外部APIを使う場合は `USE_MOCK_HOTELS=false` にしてください。
+
+`USE_MOCK_HOTELS=false` のとき、`USE_RAKUTEN_PROVIDER` が未設定の場合は楽天Providerが有効になります。楽天を使わない場合は `USE_RAKUTEN_PROVIDER=false` を明示してください。
+
+APIキーは `.env.local` に記載します。`.env.local` はGitHubに上げないでください。
+
+## 起動方法
 
 ```bash
+npm install
 npm run dev
 ```
 
-起動後、[http://localhost:3000](http://localhost:3000) を開いてください。
-
-## 検索条件のURL共有
-
-トップページで検索すると、目的地、宿泊日、人数、並び替え、上限価格、予約サイト、朝食条件がURLクエリに反映されます。
+起動後、ブラウザで次のURLを開きます。
 
 ```text
-/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02&guests=2&sortBy=priceAsc
+http://localhost:3000
 ```
 
-このURLを共有すると同じ検索条件で一覧を開けます。ページをリロードした場合もURLからフォームと検索結果を復元します。「条件をリセット」を押すとフォームを初期状態へ戻し、URLクエリと一覧の絞り込みを解除します。空の条件と `false` の朝食条件はURLに含めません。
+## 動作確認方法
 
-## お気に入り機能
+- トップページでホテル一覧が表示される
+- 目的地・日付・人数を入力して検索できる
+- 並び替えができる
+- 上限価格、予約サイト、朝食ありで絞り込みできる
+- ホテル詳細ページを開ける
+- ホテルをお気に入り登録できる
+- `/favorites` でお気に入り一覧を確認できる
+- 検索条件付きURLをリロードしても条件が残る
+- `/api/hotels` がJSONを返す
+- `/api/debug/provider-config` でProvider設定を確認できる
 
-ホテル一覧と詳細画面からホテルをお気に入りに登録できます。登録したホテルは [お気に入り一覧](http://localhost:3000/favorites) で確認でき、一覧上で解除した場合も表示へ即時反映されます。
-
-お気に入りのホテルIDはブラウザの `localStorage` に `favoriteHotelIds` というキーで保存します。現時点ではデータベースを使用していないため、別ブラウザや別端末には共有されません。ブラウザのサイトデータを削除した場合もお気に入りは消去されます。
-
-外部API接続時は、`USE_MOCK_HOTELS=false` と必要な認証情報を設定してサーバーを再起動します。`http://localhost:3000/api/hotels?keyword=東京` で変換後のJSONを確認できます。
-
-## 画像・価格表示とUI
-
-ホテル一覧カードと詳細ページでは共通の `HotelImage` コンポーネントで画像を表示します。`imageUrl` が空、未設定、または読み込みに失敗した場合は、カードや詳細ページの高さを保ったままグレー系の「画像なし」表示に切り替えます。
-
-料金は `1` 円以上の値だけを有効な価格として扱います。外部APIから価格を取得できず `0`、`null`、`undefined` になった場合、画面には `0円` と表示せず「価格未定」または「価格は予約サイトで確認」と表示します。最安値ラベルも有効な価格があるofferだけに付与します。
-
-一覧、詳細、お気に入りのUIは、検索フォーム、結果件数、0件表示、ホテルカード、予約サイトごとの料金比較がスマホでも崩れにくい余白と配置になるよう調整しています。
-
-検索中は共通の `LoadingState` で「ホテル情報を検索中...」とスピナーを表示します。API取得失敗やProvider設定ミスは `ErrorMessage` にタイトル、エラーメッセージ、ヒント、再試行ボタンを表示します。検索結果やお気に入りが0件の場合は `EmptyState` で理由と次の操作を示し、トップページでは条件リセットボタンから検索条件とURLクエリを初期化できます。
-
-存在しない詳細ページなどは `src/app/not-found.tsx` の404ページを表示します。予期しない画面エラーは `src/app/error.tsx` で受け、再試行ボタンからNext.jsの `reset()` を実行できます。
-
-## 楽天トラベル・じゃらんProvider
-
-`/api/hotels` は有効なProviderを呼び出し、楽天トラベルとじゃらんのレスポンスを共通の `Hotel` / `HotelOffer` 型へ変換します。その後、同じホテルと思われる結果を1件に名寄せし、楽天トラベルとじゃらんの料金をそのホテルの `offers` にまとめます。じゃらんの宿には `jalan-` で始まるIDを付け、Provider固有IDは `providerIds` にも保持します。料金を取得できない場合は `0` として保持しますが、画面には0円ではなく「料金未定」または「価格不明」と表示します。
-
-現在の名寄せでは、Unicodeの全角・半角、大文字・小文字、空白、記号を正規化したホテル名が完全一致する結果を同じホテルと判定します。名称が一方を包含する場合は、短すぎる名称を除外したうえで、正規化した住所・エリアも包含関係にある場合だけ統合します。同じ予約サイトのofferが複数ある場合は最安値を残し、全offerを価格の安い順（価格 `0` は末尾）に並べます。
-
-この判定はヒューリスティックであり完全ではありません。緯度経度はまだHotel型に保持しておらず、住所正規化も都道府県・市区町村表記などの簡易処理に留まります。今後は緯度経度、住所の構造化、名称の類似度スコア、手動統合ルールを組み合わせて誤統合と統合漏れを減らす予定です。
-
-複数Providerのうち一部だけが失敗した場合は、取得できたProviderの結果を返して画面に警告を表示します。すべて失敗した場合、または有効なProviderがない場合はエラーを返します。詳細ページでは代表IDのホテルを取得後、ホテル名で他Providerを再検索してoffersを統合します。API側が該当宿を返さない場合は代表Providerの情報だけを表示します。
-
-APIエラーは可能な範囲で次のJSON形式を返します。
-
-```json
-{
-  "error": "エラーメッセージ",
-  "hint": "解決方法のヒント"
-}
-```
-
-Provider設定ミスが疑われる場合は、次のURLで現在の設定状態を確認できます。
+例:
 
 ```text
-/api/debug/provider-config
+http://localhost:3000/api/hotels?keyword=東京
+http://localhost:3000/api/debug/provider-config
 ```
 
-返却例:
+## API連携について
 
-```json
-{
-  "useMockHotels": false,
-  "useRakutenProvider": false,
-  "useJalanProvider": false,
-  "enabledProviders": [],
-  "hasRakutenTravelAppId": false,
-  "hasRakutenTravelAccessKey": false,
-  "hasJalanApiKey": false,
-  "status": "error",
-  "hint": ".env.localでUSE_MOCK_HOTELS=trueにするか、USE_RAKUTEN_PROVIDER=trueなどを設定してください"
-}
-```
+画面側は楽天トラベルAPIやじゃらんAPIを直接呼びません。Next.jsのRoute Handlerを経由して、サーバー側でProviderからホテル情報を取得します。
 
-`enabledProviders` が空の場合、`/api/hotels` は「有効なホテルProviderがありません」と `hint` を返し、画面では「ホテル情報を取得できませんでした」「有効なホテルProviderがありません」「.env.local の設定を確認してください」と表示します。`.env.local` を変更した後は開発サーバーを再起動してください。
+Providerごとの処理は `src/lib/hotelProviders/` に分けています。楽天、じゃらん、仮データのレスポンスは、アプリ共通の `Hotel` 型と `HotelOffer` 型に変換します。複数Providerが有効な場合は、取得結果を統合して画面に表示します。
 
-### Provider別の動作確認
+主な内部APIは次の通りです。
 
-各パターンで `.env.local` を変更した後、`npm run dev` でサーバーを起動し、[トップページ](http://localhost:3000)、`/api/hotels?keyword=東京`、`/api/hotels?keyword=新宿` を確認します。
+- `/api/hotels`: ホテル一覧を取得
+- `/api/hotels/[id]`: ホテル詳細を取得
+- `/api/areas`: 地区候補を取得
+- `/api/debug/provider-config`: Provider設定を確認
 
-パターンA（仮データ）:
+## Provider構成
 
-```dotenv
-USE_MOCK_HOTELS=true
-```
+Providerは次の3種類です。
 
-パターンB（楽天のみ）:
+- `mockProvider`: ローカルの仮データを返すProvider
+- `rakutenProvider`: 楽天トラベルAPIに接続するProvider
+- `jalanProvider`: じゃらんAPIに接続するProvider
 
-```dotenv
-USE_MOCK_HOTELS=false
-USE_RAKUTEN_PROVIDER=true
-USE_JALAN_PROVIDER=false
-```
+Providerの切り替えには次の環境変数を使います。
 
-パターンC（じゃらんのみ）:
+- `USE_MOCK_HOTELS`
+- `USE_RAKUTEN_PROVIDER`
+- `USE_JALAN_PROVIDER`
 
-```dotenv
-USE_MOCK_HOTELS=false
-USE_RAKUTEN_PROVIDER=false
-USE_JALAN_PROVIDER=true
-JALAN_API_KEY=取得したAPIキー
-```
+`USE_MOCK_HOTELS=true` の場合は仮データを使用します。`USE_MOCK_HOTELS=false` の場合は、`USE_RAKUTEN_PROVIDER` と `USE_JALAN_PROVIDER` で有効にしたProviderを使用します。複数Providerが有効な場合は、それぞれの結果を結合し、同じホテルと思われるデータをまとめます。
 
-パターンD（楽天 + じゃらん）:
+## 名寄せ機能について
 
-```dotenv
-USE_MOCK_HOTELS=false
-USE_RAKUTEN_PROVIDER=true
-USE_JALAN_PROVIDER=true
-JALAN_API_KEY=取得したAPIキー
-```
+複数Providerから取得した同じホテルと思われるデータを1つのホテルにまとめます。予約サイトごとの料金は `offers` に集約し、ホテル一覧や詳細ページで比較できるようにしています。
 
-楽天を有効にするパターンでは、あわせて `RAKUTEN_TRAVEL_APP_ID` と `RAKUTEN_TRAVEL_ACCESS_KEY` を設定してください。仮データでは `/hotels/1`、外部Providerでは一覧に返ったIDの詳細URLを確認します。
+現在はホテル名やエリアを使った簡易的な判定です。そのため、完全に同じホテルでも別ホテルとして表示されたり、別ホテルが同じホテルとしてまとまったりする可能性があります。将来的には住所、緯度経度、名称の類似度などを使って名寄せ精度を上げる予定です。
 
-## 楽天トラベル地区コードAPI
+## お気に入り機能について
 
-楽天トラベル地区コードAPI（`Travel/GetAreaClass/20140210`）への接続を追加しました。このAPIは「日本 → 東京都 → 東京23区内 → 新宿…」のような楽天独自の地区階層とコードを返します。アプリでは最下層ごとにフラット化し、次の内部APIで目的地名を部分一致検索できます。
+お気に入りホテルIDはブラウザの `localStorage` に保存しています。保存キー名は `favoriteHotelIds` です。
+
+ブラウザを更新してもお気に入りは残ります。ただし、別ブラウザ・別端末には共有されません。現時点ではデータベースを使っていないため、ユーザーごとの永続保存やログイン連携は未対応です。
+
+## 検索条件URL共有について
+
+検索条件はURLクエリに反映されます。URLを共有すると、同じ検索条件でページを開けます。ページをリロードしても条件はURLから復元されます。
+
+例:
 
 ```text
-/api/areas?keyword=東京
-/api/areas?keyword=新宿
-/api/areas?keyword=横浜
+http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02&guests=2&sortBy=priceAsc
 ```
 
-空の `keyword` には `[]` を返し、APIの検索結果は最大20件です。検索フォームでは目的地を入力して「地区候補を検索」を押し、上位5件から1件を選択します。選択中の階層名を画面に表示し、表示名と4種類の地区コードを検索条件に保持します。
+リセットボタンを押すと検索条件を消し、URLクエリも初期状態に戻します。
 
-楽天の地区コードAPIへ接続する場合は、`.env.local` に次を設定してください。
+## スクリーンショット
 
-```dotenv
-RAKUTEN_TRAVEL_APP_ID=楽天ウェブサービスのアプリID
-RAKUTEN_TRAVEL_ACCESS_KEY=楽天ウェブサービスのアクセスキー
-RAKUTEN_AFFILIATE_ID=任意のアフィリエイトID
-USE_MOCK_HOTELS=false
-```
+画像は後から追加予定です。
 
-`USE_MOCK_HOTELS=true` はホテル一覧・詳細をローカルの仮データで確認する場合、`false` は有効にした外部Providerを使う場合に指定します。楽天Providerではキーワード検索・施設詳細・空室検索を利用します。
+## 工夫した点
 
-## 楽天トラベル検索APIへの対応状況
+- Provider構成にして、外部APIを追加しやすくした
+- 楽天とじゃらんのデータを共通の `Hotel` 型に変換した
+- 複数Providerの結果を名寄せして `offers` にまとめる構成にした
+- 画像がないホテルでもUIが崩れないようにした
+- 価格不明時に `0円` と表示しないようにした
+- localStorageでお気に入りを簡単に保存できるようにした
+- URLクエリで検索条件を共有できるようにした
+- ローディング、エラー、0件表示を分かりやすくした
+- Provider設定確認APIで環境変数の状態を確認できるようにした
 
-ホテル検索は楽天トラベルのキーワード検索APIと空室検索API（`Travel/VacantHotelSearch/20170426`）に対応しています。
+## 今後の課題
 
-内部APIは次の形式に対応しています。
+- 名寄せ精度の向上
+- 楽天空室検索APIの本格対応
+- じゃらん空室検索APIの本格対応
+- 一休.comやYahoo!トラベルはAPIや規約面を確認し、まずはアフィリエイトリンク中心に検討する
+- データベースを使ったユーザーごとのお気に入り保存
+- ログイン機能
+- レビュー・評価情報の充実
+- Vercelなどへのデプロイ
+- テストの追加
 
-```text
-/api/hotels?keyword=東京
-/api/hotels?keyword=東京&checkIn=2026-08-01&checkOut=2026-08-02&guests=2
-/api/hotels?keyword=新宿&checkIn=2026-08-01&checkOut=2026-08-02&guests=2&areaClassCode=japan&middleClassCode=tokyo&smallClassCode=tokyo&detailClassCode=（選択候補の値）
-```
+## 注意事項
 
-画面で地区候補を選ぶと、`SearchCondition.rakutenAreaCandidate`、トップページ、`fetchHotels`、`/api/hotels` の順に地区コードが渡ります。サーバーは内部APIの `areaClassCode` を楽天APIの `largeClassCode` に変換し、残りの地区コードとともに送信します。
-
-チェックイン日、チェックアウト日、人数がすべて揃い、地区コードが1つ以上ある場合に空室検索APIを呼びます。地区候補が未選択、または宿泊条件が不足している場合はキーワード検索APIへフォールバックし、画面に理由を表示します。空室レスポンスはキーワードレスポンスとは別の変換関数で `Hotel` と `HotelOffer` に変換します。料金を取得できない場合は `0` として保持し、一覧と詳細では「料金未定」または「価格不明」と表示します。
-
-- `USE_MOCK_HOTELS=true`（既定）: ホテル一覧・詳細では楽天APIを呼ばず、ローカルの仮データを使用します。
-- `USE_MOCK_HOTELS=false`: `USE_RAKUTEN_PROVIDER` と `USE_JALAN_PROVIDER` で有効にしたAPIへ接続します。認証情報を `.env.local` に設定してください。
-
-`USE_MOCK_HOTELS` はホテル一覧・詳細と地区候補のデータ元を切り替えます。`true` または未設定ならローカルの仮データ、`false` なら有効な外部Providerを使用します。地区候補検索は従来どおり楽天地区コードAPIを利用するため、じゃらんだけを有効にした構成では地区候補検索を使わず、目的地キーワードで検索してください。
-
-次の拡張候補は、緯度経度と類似度スコアを使った名寄せ精度の改善、じゃらんの宿泊日・人数に対応したプラン料金検索、入力中に候補を表示するオートコンプリートです。
+- APIキーは公開しないでください。
+- `.env.local` はGit管理しないでください。
+- 予約サイトの情報取得は各サービスの利用規約に従ってください。
+- スクレイピングではなく、公式APIや許可された方法で取得してください。
+- 表示価格はAPIレスポンスや取得タイミングによって変わる可能性があります。
+- 実際の予約条件は予約サイト側で確認してください。
