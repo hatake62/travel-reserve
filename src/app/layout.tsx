@@ -13,7 +13,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        {children}
+        <footer className="bg-slate-50 px-4 pb-8 text-center text-xs leading-6 text-slate-500 sm:px-6">
+          表示価格や空室状況は取得タイミングにより変動する場合があります。実際の予約条件は各予約サイトで確認してください。
+        </footer>
+      </body>
     </html>
   );
 }
