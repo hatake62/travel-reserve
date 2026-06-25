@@ -14,7 +14,7 @@ export function getProviderErrorHint(message: string): string | undefined {
     return "有効にしたProviderのAPIキーがVercelのEnvironment Variablesまたは.env.localに設定されているか確認してください。設定後はRedeployが必要です";
   }
   if (message.includes("楽天") && message.includes("HTTP 403")) {
-    return "HTTP 403です。楽天ウェブサービスのAllowed websites/IPsとRAKUTEN_ALLOWED_ORIGINを確認してください。";
+    return "HTTP 403です。楽天Web ServiceのAllowed websites/IPs、アプリID、アクセスキー、API URLを確認してください。";
   }
   if (message.includes("API") || message.includes("Provider")) {
     return "時間をおいて再試行するか、/api/debug/provider-configでProvider設定を確認してください";

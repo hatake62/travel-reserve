@@ -1,4 +1,11 @@
 import type { RakutenAreaCandidate } from "@/types/rakutenArea";
+import {
+  createRakutenParams,
+  fetchRakutenApi,
+  getRakutenCredentials,
+  getRakutenResponseBodySnippet,
+  maskRakutenUrl,
+} from "./rakutenShared";
 
 const AREA_CLASS_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/GetAreaClass/20140210";
@@ -29,6 +36,15 @@ function text(record: UnknownRecord, key: string): string {
   return typeof value === "string" || typeof value === "number"
     ? String(value)
     : "";
+}
+
+function parseRakutenAreaResponse(body: string): RakutenAreaResponse | null {
+  if (!body) return null;
+  try {
+    return JSON.parse(body) as RakutenAreaResponse;
+  } catch {
+    return null;
+  }
 }
 
 function childRecords(
@@ -102,33 +118,23 @@ export function flattenRakutenAreaResponse(
 }
 
 export async function getRakutenAreaCodes(): Promise<RakutenAreaCandidate[]> {
-  const applicationId = process.env.RAKUTEN_TRAVEL_APP_ID;
-  const accessKey = process.env.RAKUTEN_TRAVEL_ACCESS_KEY;
-  if (!applicationId) {
-    throw new Error(
-      "RAKUTEN_TRAVEL_APP_IDが設定されていません。.env.localを確認してください。",
-    );
-  }
-  if (!accessKey) {
-    throw new Error(
-      "RAKUTEN_TRAVEL_ACCESS_KEYが設定されていません。.env.localを確認してください。",
-    );
-  }
+  const params = createRakutenParams(getRakutenCredentials());
+  const { response, responseBody, requestUrl } = await fetchRakutenApi(
+    AREA_CLASS_ENDPOINT,
+    params,
+    {
+      next: { revalidate: 86400 },
+    },
+  );
+  const data = parseRakutenAreaResponse(responseBody);
 
-  const params = new URLSearchParams({
-    applicationId,
-    accessKey,
-    format: "json",
-    formatVersion: "2",
-  });
-  const response = await fetch(`${AREA_CLASS_ENDPOINT}?${params}`, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 86400 },
-  });
-  const data = (await response.json().catch(() => null)) as RakutenAreaResponse | null;
-
-  if (!response.ok || !data || data.error) {
+  if (!response.ok || !data || !isRecord(data) || data.error) {
     const detail = data?.error_description ?? data?.error ?? `HTTP ${response.status}`;
+    console.error("Rakuten Area API request failed", {
+      status: response.status,
+      responseBodySnippet: getRakutenResponseBodySnippet(responseBody),
+      url: maskRakutenUrl(requestUrl),
+    });
     throw new Error(`楽天地区コードAPIから取得できませんでした: ${detail}`);
   }
   if (!("areaClasses" in data)) {

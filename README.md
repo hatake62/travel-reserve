@@ -333,6 +333,11 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 
 楽天APIがHTTP 403になる場合:
 
+- 楽天地区コードAPIのURLが `/Travel/GetAreaClass/20140210` になっているか確認する。
+- 楽天キーワード検索APIのURLが `/Travel/KeywordHotelSearch/20170426` になっているか確認する。
+- 楽天空室検索APIのURLが `/Travel/VacantHotelSearch/20170426` になっているか確認する。
+- `RAKUTEN_TRAVEL_APP_ID` と `RAKUTEN_TRAVEL_ACCESS_KEY` を設定する。
+- この実装では `applicationId` と `accessKey` をクエリパラメータに入れて楽天APIへ送信している。
 - 楽天ウェブサービスのAllowed websites/IPsに `https://travel-reserve.vercel.app` が登録されているか確認する。
 - VercelのEnvironment Variablesに `RAKUTEN_ALLOWED_ORIGIN=https://travel-reserve.vercel.app` が設定されているか確認する。
 - `USE_MOCK_HOTELS=false` が設定されているか確認する。
@@ -341,6 +346,8 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 - `RAKUTEN_TRAVEL_ACCESS_KEY` が設定されているか確認する。
 - 環境変数を変更した後にRedeployしたか確認する。
 - `/api/debug/provider-config` で楽天Provider、APIキー設定有無、`RAKUTEN_ALLOWED_ORIGIN` 設定有無を確認する。
+- `/api/areas?keyword=東京` で地区コードAPIを確認する。
+- `/api/hotels?keyword=東京` でホテル検索APIを確認する。
 
 ## 公開後の動作確認
 

@@ -1,6 +1,12 @@
 import type { Hotel } from "@/types/hotel";
 import type { HotelSearchParams } from "@/types/search";
-import { fetchWithProviderTimeout } from "@/lib/providerFetch";
+import {
+  createRakutenParams,
+  fetchRakutenApi,
+  getRakutenCredentials,
+  getRakutenResponseBodySnippet,
+  maskRakutenUrl,
+} from "./rakutenShared";
 
 const KEYWORD_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/KeywordHotelSearch/20170426";
@@ -9,12 +15,6 @@ const HOTEL_DETAIL_ENDPOINT =
 const VACANT_HOTEL_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426";
 const DEFAULT_KEYWORD = "東京";
-const DEFAULT_RAKUTEN_ALLOWED_ORIGIN = "https://travel-reserve.vercel.app";
-const SENSITIVE_RAKUTEN_QUERY_KEYS = [
-  "applicationId",
-  "accessKey",
-  "affiliateId",
-] as const;
 
 type RakutenHotelBasicInfo = {
   hotelNo?: number | string | null;
@@ -56,86 +56,6 @@ type RakutenHotelResponse = {
   error?: string;
   error_description?: string;
 };
-
-type RakutenCredentials = {
-  applicationId: string;
-  accessKey: string;
-  affiliateId?: string;
-};
-
-function getCredentials(): RakutenCredentials {
-  const applicationId = process.env.RAKUTEN_TRAVEL_APP_ID?.trim();
-  const accessKey = process.env.RAKUTEN_TRAVEL_ACCESS_KEY?.trim();
-
-  if (!applicationId) {
-    throw new Error(
-      "RAKUTEN_TRAVEL_APP_IDが設定されていません。.env.localを確認してください。",
-    );
-  }
-
-  if (!accessKey) {
-    throw new Error(
-      "RAKUTEN_TRAVEL_ACCESS_KEYが設定されていません。.env.localを確認してください。",
-    );
-  }
-
-  return {
-    applicationId,
-    accessKey,
-    affiliateId: process.env.RAKUTEN_AFFILIATE_ID?.trim() || undefined,
-  };
-}
-
-function createSearchParams(credentials: RakutenCredentials): URLSearchParams {
-  const params = new URLSearchParams({
-    applicationId: credentials.applicationId,
-    accessKey: credentials.accessKey,
-    format: "json",
-    formatVersion: "2",
-  });
-
-  if (credentials.affiliateId) {
-    params.set("affiliateId", credentials.affiliateId);
-  }
-
-  return params;
-}
-
-function getRakutenAllowedOrigin(): string {
-  const origin =
-    process.env.RAKUTEN_ALLOWED_ORIGIN?.trim() || DEFAULT_RAKUTEN_ALLOWED_ORIGIN;
-  return origin.replace(/\/+$/, "");
-}
-
-function maskRakutenUrl(rawUrl: string): string {
-  const url = new URL(rawUrl);
-  for (const key of SENSITIVE_RAKUTEN_QUERY_KEYS) {
-    if (url.searchParams.has(key)) {
-      url.searchParams.set(key, "***");
-    }
-  }
-  return url.toString();
-}
-
-function maskRakutenSecrets(value: string): string {
-  const secrets = [
-    process.env.RAKUTEN_TRAVEL_APP_ID,
-    process.env.RAKUTEN_TRAVEL_ACCESS_KEY,
-    process.env.RAKUTEN_AFFILIATE_ID,
-  ].flatMap((secret) => {
-    const trimmed = secret?.trim();
-    return trimmed ? [trimmed, encodeURIComponent(trimmed)] : [];
-  });
-
-  return secrets.reduce(
-    (masked, secret) => masked.split(secret).join("***"),
-    value,
-  );
-}
-
-function getResponseBodySnippet(body: string): string {
-  return maskRakutenSecrets(body).slice(0, 500);
-}
 
 function parseRakutenResponse(body: string): RakutenHotelResponse | null {
   if (!body) return null;
@@ -272,28 +192,20 @@ async function fetchRakutenHotels(
   params: URLSearchParams,
   mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
 ): Promise<Hotel[]> {
-  const requestUrl = `${endpoint}?${params.toString()}`;
-  const allowedOrigin = getRakutenAllowedOrigin();
-  const response = await fetchWithProviderTimeout(
-    requestUrl,
+  const { response, responseBody, requestUrl } = await fetchRakutenApi(
+    endpoint,
+    params,
     {
-      headers: {
-        Accept: "application/json",
-        Referer: allowedOrigin,
-        Origin: allowedOrigin,
-      },
       next: { revalidate: 300 },
     },
-    { providerName: "楽天トラベル" },
   );
-  const responseBody = await response.text().catch(() => "");
   const data = parseRakutenResponse(responseBody);
 
   if (!data || !isRecord(data)) {
     if (!response.ok) {
       console.error("Rakuten Travel API request failed", {
         status: response.status,
-        responseBodySnippet: getResponseBodySnippet(responseBody),
+        responseBodySnippet: getRakutenResponseBodySnippet(responseBody),
         url: maskRakutenUrl(requestUrl),
       });
       throw new Error(
@@ -314,7 +226,7 @@ async function fetchRakutenHotels(
       : responseDetail ?? `HTTP ${response.status}`;
     console.error("Rakuten Travel API request failed", {
       status: response.status,
-      responseBodySnippet: getResponseBodySnippet(responseBody),
+      responseBodySnippet: getRakutenResponseBodySnippet(responseBody),
       url: maskRakutenUrl(requestUrl),
     });
     throw new Error(`楽天トラベルAPIからホテル情報を取得できませんでした: ${detail}`);
@@ -334,8 +246,7 @@ async function fetchRakutenHotels(
 export async function getRakutenHotelsByKeyword({
   keyword,
 }: { keyword?: string } = {}): Promise<Hotel[]> {
-  const credentials = getCredentials();
-  const params = createSearchParams(credentials);
+  const params = createRakutenParams(getRakutenCredentials());
   params.set("keyword", keyword?.trim() || DEFAULT_KEYWORD);
   params.set("hits", "10");
   params.set("page", "1");
@@ -376,8 +287,7 @@ export async function getRakutenVacantHotels(
     return getRakutenHotelsByKeyword({ keyword });
   }
 
-  const credentials = getCredentials();
-  const params = createSearchParams(credentials);
+  const params = createRakutenParams(getRakutenCredentials());
   const area = options.rakutenAreaCandidate;
   params.set("checkinDate", checkIn);
   params.set("checkoutDate", checkOut);
@@ -414,8 +324,7 @@ export const getRakutenHotels = getRakutenHotelsByKeyword;
 export async function getRakutenHotelById(
   id: string | number,
 ): Promise<Hotel | undefined> {
-  const credentials = getCredentials();
-  const params = createSearchParams(credentials);
+  const params = createRakutenParams(getRakutenCredentials());
   params.set("hotelNo", String(id));
 
   return (await fetchRakutenHotels(HOTEL_DETAIL_ENDPOINT, params))[0];
