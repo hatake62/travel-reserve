@@ -10,19 +10,22 @@
     "lint:fix": "eslint --fix"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "latest",
     "next": "latest",
+    "pg": "^8.22.0",
+    "postcss": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "tailwindcss": "latest",
-    "@tailwindcss/postcss": "latest",
-    "postcss": "latest"
+    "recharts": "^3.9.0",
+    "tailwindcss": "latest"
   },
   "devDependencies": {
-    "typescript": "latest",
     "@types/node": "latest",
+    "@types/pg": "^8.20.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
-    "eslint-config-next": "latest"
+    "eslint-config-next": "latest",
+    "typescript": "latest"
   }
 }

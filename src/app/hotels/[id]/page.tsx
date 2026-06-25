@@ -4,6 +4,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import FavoriteButton from "@/components/FavoriteButton";
 import HotelImage from "@/components/HotelImage";
 import LoadingState from "@/components/LoadingState";
+import PriceHistorySection from "@/components/PriceHistorySection";
 import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
 import {
   formatPrice,
@@ -269,6 +270,8 @@ export default function HotelDetailPage({
             </section>
           </div>
         </article>
+
+        <PriceHistorySection hotelId={hotel.id} />
       </div>
     </main>
   );
