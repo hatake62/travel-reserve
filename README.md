@@ -116,6 +116,7 @@ USE_JALAN_PROVIDER=false
 - `RAKUTEN_TRAVEL_APP_ID`: 楽天トラベルAPIのアプリIDです。
 - `RAKUTEN_TRAVEL_ACCESS_KEY`: 楽天トラベルAPIのアクセスキーです。
 - `RAKUTEN_AFFILIATE_ID`: 楽天アフィリエイトIDです。任意項目です。
+- `RAKUTEN_ALLOWED_ORIGIN`: 楽天ウェブサービスのAllowed websites/IPsに登録した公開URLです。例: `https://travel-reserve.vercel.app`
 - `JALAN_API_KEY`: じゃらんAPIキーです。
 
 現在の実装では、`USE_MOCK_HOTELS` が未設定または `true` の場合は `mockProvider` だけを使用し、楽天ProviderとじゃらんProviderは呼びません。外部APIを使う場合は `USE_MOCK_HOTELS=false` にしてください。
@@ -192,6 +193,7 @@ USE_JALAN_PROVIDER=false
 RAKUTEN_TRAVEL_APP_ID=実際の値
 RAKUTEN_TRAVEL_ACCESS_KEY=実際の値
 RAKUTEN_AFFILIATE_ID=任意
+RAKUTEN_ALLOWED_ORIGIN=https://travel-reserve.vercel.app
 ```
 
 段階3: じゃらんProviderのみ
@@ -214,6 +216,7 @@ USE_JALAN_PROVIDER=true
 RAKUTEN_TRAVEL_APP_ID=実際の値
 RAKUTEN_TRAVEL_ACCESS_KEY=実際の値
 RAKUTEN_AFFILIATE_ID=任意
+RAKUTEN_ALLOWED_ORIGIN=https://travel-reserve.vercel.app
 JALAN_API_KEY=実際の値
 ```
 
@@ -305,11 +308,12 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 1. Vercelで `USE_MOCK_HOTELS=false` を設定する。
 2. `USE_RAKUTEN_PROVIDER=true`、`USE_JALAN_PROVIDER=false` を設定する。
 3. `RAKUTEN_TRAVEL_APP_ID` と `RAKUTEN_TRAVEL_ACCESS_KEY` を設定する。
-4. 必要な場合だけ `RAKUTEN_AFFILIATE_ID` を設定する。
-5. Redeployする。
-6. `https://travel-reserve.vercel.app/api/debug/provider-config` で楽天Providerが有効で、必要なキーが設定済みになっていることを確認する。
-7. `https://travel-reserve.vercel.app/api/hotels?keyword=東京` がJSONを返すことを確認する。
-8. トップページで東京を検索する。
+4. `RAKUTEN_ALLOWED_ORIGIN=https://travel-reserve.vercel.app` を設定する。
+5. 必要な場合だけ `RAKUTEN_AFFILIATE_ID` を設定する。
+6. Redeployする。
+7. `https://travel-reserve.vercel.app/api/debug/provider-config` で楽天Providerが有効で、必要なキーと `RAKUTEN_ALLOWED_ORIGIN` が設定済みになっていることを確認する。
+8. `https://travel-reserve.vercel.app/api/hotels?keyword=東京` がJSONを返すことを確認する。
+9. トップページで東京を検索する。
 
 じゃらんProvider確認:
 
@@ -326,6 +330,17 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 2. 必要なAPIキーを設定する。
 3. Redeployする。
 4. `/api/debug/provider-config` と `/api/hotels?keyword=東京` を確認する。
+
+楽天APIがHTTP 403になる場合:
+
+- 楽天ウェブサービスのAllowed websites/IPsに `https://travel-reserve.vercel.app` が登録されているか確認する。
+- VercelのEnvironment Variablesに `RAKUTEN_ALLOWED_ORIGIN=https://travel-reserve.vercel.app` が設定されているか確認する。
+- `USE_MOCK_HOTELS=false` が設定されているか確認する。
+- `USE_RAKUTEN_PROVIDER=true` が設定されているか確認する。
+- `RAKUTEN_TRAVEL_APP_ID` が設定されているか確認する。
+- `RAKUTEN_TRAVEL_ACCESS_KEY` が設定されているか確認する。
+- 環境変数を変更した後にRedeployしたか確認する。
+- `/api/debug/provider-config` で楽天Provider、APIキー設定有無、`RAKUTEN_ALLOWED_ORIGIN` 設定有無を確認する。
 
 ## 公開後の動作確認
 

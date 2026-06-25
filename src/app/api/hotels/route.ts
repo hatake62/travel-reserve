@@ -71,10 +71,14 @@ export async function GET(request: Request) {
     const message = error instanceof Error ? error.message : "";
     const isCredentialError =
       message.includes("RAKUTEN_TRAVEL_") || message.includes("JALAN_API_KEY");
+    const isRakutenForbiddenError =
+      message.includes("楽天") && message.includes("HTTP 403");
     const hasStayCondition = new URL(request.url).searchParams.has("checkIn");
     const providerHint = getProviderErrorHint(message);
     const responseMessage = message.includes("有効なホテルProviderがありません")
       ? "有効なホテルProviderがありません"
+      : isRakutenForbiddenError
+      ? "楽天APIの取得に失敗しました"
       : isCredentialError
       ? `APIキーを確認してください: ${message}`
       : hasStayCondition

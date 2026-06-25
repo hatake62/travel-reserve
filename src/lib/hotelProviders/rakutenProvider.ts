@@ -9,6 +9,12 @@ const HOTEL_DETAIL_ENDPOINT =
 const VACANT_HOTEL_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426";
 const DEFAULT_KEYWORD = "東京";
+const DEFAULT_RAKUTEN_ALLOWED_ORIGIN = "https://travel-reserve.vercel.app";
+const SENSITIVE_RAKUTEN_QUERY_KEYS = [
+  "applicationId",
+  "accessKey",
+  "affiliateId",
+] as const;
 
 type RakutenHotelBasicInfo = {
   hotelNo?: number | string | null;
@@ -93,6 +99,51 @@ function createSearchParams(credentials: RakutenCredentials): URLSearchParams {
   }
 
   return params;
+}
+
+function getRakutenAllowedOrigin(): string {
+  const origin =
+    process.env.RAKUTEN_ALLOWED_ORIGIN?.trim() || DEFAULT_RAKUTEN_ALLOWED_ORIGIN;
+  return origin.replace(/\/+$/, "");
+}
+
+function maskRakutenUrl(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  for (const key of SENSITIVE_RAKUTEN_QUERY_KEYS) {
+    if (url.searchParams.has(key)) {
+      url.searchParams.set(key, "***");
+    }
+  }
+  return url.toString();
+}
+
+function maskRakutenSecrets(value: string): string {
+  const secrets = [
+    process.env.RAKUTEN_TRAVEL_APP_ID,
+    process.env.RAKUTEN_TRAVEL_ACCESS_KEY,
+    process.env.RAKUTEN_AFFILIATE_ID,
+  ].flatMap((secret) => {
+    const trimmed = secret?.trim();
+    return trimmed ? [trimmed, encodeURIComponent(trimmed)] : [];
+  });
+
+  return secrets.reduce(
+    (masked, secret) => masked.split(secret).join("***"),
+    value,
+  );
+}
+
+function getResponseBodySnippet(body: string): string {
+  return maskRakutenSecrets(body).slice(0, 500);
+}
+
+function parseRakutenResponse(body: string): RakutenHotelResponse | null {
+  if (!body) return null;
+  try {
+    return JSON.parse(body) as RakutenHotelResponse;
+  } catch {
+    return null;
+  }
 }
 
 function toFiniteNumber(value: number | string | null | undefined): number {
@@ -221,18 +272,30 @@ async function fetchRakutenHotels(
   params: URLSearchParams,
   mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
 ): Promise<Hotel[]> {
+  const requestUrl = `${endpoint}?${params.toString()}`;
+  const allowedOrigin = getRakutenAllowedOrigin();
   const response = await fetchWithProviderTimeout(
-    `${endpoint}?${params.toString()}`,
+    requestUrl,
     {
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        Referer: allowedOrigin,
+        Origin: allowedOrigin,
+      },
       next: { revalidate: 300 },
     },
     { providerName: "楽天トラベル" },
   );
-  const data = (await response.json().catch(() => null)) as RakutenHotelResponse | null;
+  const responseBody = await response.text().catch(() => "");
+  const data = parseRakutenResponse(responseBody);
 
   if (!data || !isRecord(data)) {
     if (!response.ok) {
+      console.error("Rakuten Travel API request failed", {
+        status: response.status,
+        responseBodySnippet: getResponseBodySnippet(responseBody),
+        url: maskRakutenUrl(requestUrl),
+      });
       throw new Error(
         `楽天トラベルAPIからホテル情報を取得できませんでした: HTTP ${response.status}`,
       );
@@ -245,7 +308,15 @@ async function fetchRakutenHotels(
   }
 
   if (!response.ok || !data || data.error) {
-    const detail = data?.error_description ?? data?.error ?? `HTTP ${response.status}`;
+    const responseDetail = data?.error_description ?? data?.error;
+    const detail = !response.ok
+      ? `HTTP ${response.status}${responseDetail ? `: ${responseDetail}` : ""}`
+      : responseDetail ?? `HTTP ${response.status}`;
+    console.error("Rakuten Travel API request failed", {
+      status: response.status,
+      responseBodySnippet: getResponseBodySnippet(responseBody),
+      url: maskRakutenUrl(requestUrl),
+    });
     throw new Error(`楽天トラベルAPIからホテル情報を取得できませんでした: ${detail}`);
   }
 

@@ -22,6 +22,7 @@ export async function GET() {
       useRakutenProvider,
       useJalanProvider,
       enabledProviders,
+      hasRakutenAllowedOrigin: Boolean(process.env.RAKUTEN_ALLOWED_ORIGIN?.trim()),
       hasRakutenTravelAppId: Boolean(process.env.RAKUTEN_TRAVEL_APP_ID?.trim()),
       hasRakutenTravelAccessKey: Boolean(
         process.env.RAKUTEN_TRAVEL_ACCESS_KEY?.trim(),
