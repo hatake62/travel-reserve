@@ -2,6 +2,9 @@ export type HotelOffer = {
   site: string;
   price?: number | null;
   bookingUrl: string;
+  planListUrl?: string;
+  reserveUrl?: string;
+  isDateSpecific?: boolean;
   roomType: string;
   hasBreakfast: boolean;
   cancellation: string;

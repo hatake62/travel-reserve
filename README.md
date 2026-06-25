@@ -565,6 +565,26 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 
 `YOUR_CRON_SECRET` はプレースホルダです。実値をREADMEやGitHubに書かないでください。
 
+## 指定宿泊日の楽天トラベル予約リンク
+
+ホテル詳細ページの料金推移セクションでは、入力した `checkInDate`、`checkOutDate`、`adults` を使って楽天トラベルの予約リンク候補を取得できます。
+
+仕様:
+
+- 指定した宿泊日・人数がある場合、楽天トラベル空室検索APIへ `hotelNo`、`checkinDate`、`checkoutDate`、`adultNum` を指定して問い合わせます。
+- 取得できた場合は、`roomBasicInfo.reserveUrl` を優先して「最安プランを楽天トラベルで見る」に使います。
+- `reserveUrl` がない場合は、`hotelBasicInfo.planListUrl`、`hotelBasicInfo.hotelInformationUrl` の順にフォールバックします。
+- 楽天APIが `Data Not Found`、`not_found`、HTTP 404を返した場合は、指定条件で空室・料金が見つからない状態として扱い、通常の楽天トラベルページへのリンクを表示します。
+- 楽天APIの仕様上、必ずしもすべての宿泊条件で予約リンクが取得できるとは限りません。
+- 実際の料金、空室、キャンセル条件、予約条件は楽天トラベル側で確認してください。
+- APIキー、`DATABASE_URL`、`CRON_SECRET` の実値は画面、ログ、APIレスポンス、READMEに出しません。
+
+予約リンクAPI:
+
+```text
+/api/hotels/rakuten-78182/booking-url?checkIn=2026-08-10&checkOut=2026-08-11&adults=2
+```
+
 じゃらんProvider確認:
 
 1. Vercelで `USE_MOCK_HOTELS=false` を設定する。

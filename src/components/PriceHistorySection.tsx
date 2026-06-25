@@ -3,6 +3,7 @@
 import ErrorMessage from "@/components/ErrorMessage";
 import LoadingState from "@/components/LoadingState";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
+import type { BookingLinksResponse } from "@/types/bookingLinks";
 import type { PriceHistoryResponse } from "@/types/priceHistory";
 import Link from "next/link";
 import { useState } from "react";
@@ -34,9 +35,11 @@ export default function PriceHistorySection({
   const [checkOutDate, setCheckOutDate] = useState(defaultDates.checkOutDate);
   const [adults, setAdults] = useState(2);
   const [history, setHistory] = useState<PriceHistoryResponse | null>(null);
+  const [bookingLinks, setBookingLinks] = useState<BookingLinksResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isLoadingBookingLinks, setIsLoadingBookingLinks] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -159,6 +162,42 @@ export default function PriceHistorySection({
     }
   }
 
+  async function loadBookingLinks() {
+    setIsLoadingBookingLinks(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const params = new URLSearchParams({
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        adults: String(adults),
+      });
+      const response = await fetch(
+        `/api/hotels/${encodeURIComponent(String(hotelId))}/booking-url?${params.toString()}`,
+        { headers: { Accept: "application/json" } },
+      );
+      const data = (await response.json().catch(() => ({}))) as
+        | BookingLinksResponse
+        | { error?: string };
+      if (!response.ok) {
+        throw new Error(
+          "error" in data && data.error
+            ? data.error
+            : "予約リンクの取得に失敗しました",
+        );
+      }
+      setBookingLinks(data as BookingLinksResponse);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "予約リンクの取得に失敗しました",
+      );
+      setBookingLinks(null);
+    } finally {
+      setIsLoadingBookingLinks(false);
+    }
+  }
+
   return (
     <section
       aria-labelledby="price-history-heading"
@@ -218,7 +257,7 @@ export default function PriceHistorySection({
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <button
           className="h-11 rounded-lg bg-sky-700 px-5 text-sm font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={isLoading || isRegistering || isCapturing}
+          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
           onClick={() => {
             void loadPriceHistory();
           }}
@@ -228,7 +267,7 @@ export default function PriceHistorySection({
         </button>
         <button
           className="h-11 rounded-lg border border-sky-700 px-5 text-sm font-bold text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
-          disabled={isLoading || isRegistering || isCapturing}
+          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
           onClick={registerPriceWatchTarget}
           type="button"
         >
@@ -238,11 +277,21 @@ export default function PriceHistorySection({
         </button>
         <button
           className="h-11 rounded-lg border border-amber-600 px-5 text-sm font-bold text-amber-700 transition hover:bg-amber-50 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
-          disabled={isLoading || isRegistering || isCapturing}
+          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
           onClick={captureOnce}
           type="button"
         >
           {isCapturing ? "保存中..." : "今すぐ1回取得して保存"}
+        </button>
+        <button
+          className="h-11 rounded-lg bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
+          onClick={loadBookingLinks}
+          type="button"
+        >
+          {isLoadingBookingLinks
+            ? "予約リンク取得中..."
+            : "指定条件の楽天プランを見る"}
         </button>
       </div>
 
@@ -275,6 +324,91 @@ export default function PriceHistorySection({
           <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-600">
             宿泊日と人数を指定して、保存済みの料金推移を確認できます。
           </p>
+        )}
+
+        {bookingLinks && (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-4">
+              <p className="text-sm font-bold text-slate-900">
+                楽天トラベルの予約リンク
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                {bookingLinks.status === "available"
+                  ? "指定条件に対応する予約リンク候補を取得しました。"
+                  : "指定条件に合う空室・料金は見つかりませんでした。"}
+              </p>
+            </div>
+            {bookingLinks.warnings.length > 0 && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                {bookingLinks.warnings.join(" / ")}
+              </div>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              {bookingLinks.bestReserveUrl && (
+                <a
+                  className="inline-flex h-11 items-center justify-center rounded-lg bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                  href={bookingLinks.bestReserveUrl}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  最安プランを楽天トラベルで見る
+                </a>
+              )}
+              {bookingLinks.planListUrl && (
+                <a
+                  className="inline-flex h-11 items-center justify-center rounded-lg border border-sky-700 px-5 text-sm font-bold text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                  href={bookingLinks.planListUrl}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  指定条件でプラン一覧を見る
+                </a>
+              )}
+              {!bookingLinks.bestReserveUrl &&
+                !bookingLinks.planListUrl &&
+                bookingLinks.fallbackUrl && (
+                  <a
+                    className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-700 px-5 text-sm font-bold text-slate-700 transition hover:bg-white focus:outline-none focus:ring-4 focus:ring-slate-200"
+                    href={bookingLinks.fallbackUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    通常の楽天トラベルページを開く
+                  </a>
+                )}
+              {!bookingLinks.bestReserveUrl &&
+                !bookingLinks.planListUrl &&
+                !bookingLinks.fallbackUrl && (
+                  <span className="inline-flex h-11 items-center rounded-lg bg-slate-100 px-5 text-sm font-bold text-slate-500">
+                    予約リンクを取得できませんでした
+                  </span>
+                )}
+            </div>
+            {bookingLinks.links.length > 0 && (
+              <ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+                {bookingLinks.links.slice(0, 3).map((link) => (
+                  <li className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between" key={link.url}>
+                    <div>
+                      <p className="font-bold text-slate-900">
+                        {link.planName || link.roomName || "楽天トラベルのプラン"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {link.price ? `${link.price.toLocaleString("ja-JP")}円〜` : "価格未取得"}
+                      </p>
+                    </div>
+                    <a
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-sky-700 px-4 text-xs font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                      href={link.url}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      このプランを見る
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
     </section>
