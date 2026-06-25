@@ -243,6 +243,7 @@ https://travel-reserve.vercel.app/hotels/1
 https://travel-reserve.vercel.app/favorites
 https://travel-reserve.vercel.app/api/hotels
 https://travel-reserve.vercel.app/api/hotels?keyword=東京
+https://travel-reserve.vercel.app/api/hotels?keyword=東京&debug=true
 https://travel-reserve.vercel.app/api/debug/provider-config
 ```
 
@@ -298,6 +299,7 @@ https://travel-reserve.vercel.app/hotels/1
 https://travel-reserve.vercel.app/favorites
 https://travel-reserve.vercel.app/api/hotels
 https://travel-reserve.vercel.app/api/hotels?keyword=東京
+https://travel-reserve.vercel.app/api/hotels?keyword=東京&debug=true
 https://travel-reserve.vercel.app/api/debug/provider-config
 ```
 
@@ -314,6 +316,17 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 7. `https://travel-reserve.vercel.app/api/debug/provider-config` で楽天Providerが有効で、必要なキーと `RAKUTEN_ALLOWED_ORIGIN` が設定済みになっていることを確認する。
 8. `https://travel-reserve.vercel.app/api/hotels?keyword=東京` がJSONを返すことを確認する。
 9. トップページで東京を検索する。
+
+楽天トラベルAPI連携確認:
+
+- 楽天Provider有効時は、ホテル情報を楽天トラベルAPIから取得する。
+- `/api/hotels?keyword=東京` で外部API由来の `Hotel[]` を確認できる。
+- `/api/hotels?keyword=東京&debug=true` で `rawCount` と `mappedCount` を確認できる。
+- `rawCount > 0` かつ `mappedCount = 0` の場合は、楽天APIレスポンスから `Hotel` 型への変換処理を確認する。
+- `debug=true` でもAPIキー、`applicationId`、`accessKey`、`affiliateId` の実値は表示しない。
+- 表示価格や空室状況は取得タイミングで変動する。
+- 実際の料金、空室、キャンセル条件、予約条件は楽天トラベル側で確認する。
+- Vercelで環境変数を変更した後はRedeployが必要。
 
 外部APIの0件調査:
 

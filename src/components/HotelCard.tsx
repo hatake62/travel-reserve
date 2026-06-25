@@ -68,6 +68,9 @@ export default function HotelCard({ hotel }: HotelCardProps) {
               <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
                 {sortedOffers.map((offer) => (
                   <li className="p-3" key={`${offer.site}-${offer.roomType}`}>
+                    {(() => {
+                      const bookingUrl = offer.bookingUrl.trim();
+                      return (
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -89,17 +92,25 @@ export default function HotelCard({ hotel }: HotelCardProps) {
                         <p className="text-lg font-bold text-slate-950">
                           {formatPrice(offer.price)}
                         </p>
-                        <a
-                          aria-label={`${offer.site}で${hotel.name}を予約する`}
-                          className="mt-2 inline-flex rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"
-                          href={offer.bookingUrl}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          予約サイトへ
-                        </a>
+                        {bookingUrl ? (
+                          <a
+                            aria-label={`${offer.site}で${hotel.name}を予約する`}
+                            className="mt-2 inline-flex rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                            href={bookingUrl}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                          >
+                            予約サイトへ
+                          </a>
+                        ) : (
+                          <span className="mt-2 inline-flex rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
+                            予約サイトで確認
+                          </span>
+                        )}
                       </div>
                     </div>
+                      );
+                    })()}
                   </li>
                 ))}
               </ul>

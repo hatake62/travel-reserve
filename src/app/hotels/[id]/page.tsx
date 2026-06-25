@@ -240,15 +240,21 @@ export default function HotelDetailPage({
                           <td className="whitespace-nowrap px-5 py-5 text-slate-700">{offer.hasBreakfast ? "朝食あり" : "朝食なし"}</td>
                           <td className="px-5 py-5 text-slate-700">{offer.cancellation}</td>
                           <td className="px-5 py-5 text-right">
-                            <a
-                              aria-label={`${offer.site}で${hotel.name}を予約する`}
-                              className="inline-flex whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2.5 font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"
-                              href={offer.bookingUrl}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              予約サイトへ
-                            </a>
+                            {offer.bookingUrl.trim() ? (
+                              <a
+                                aria-label={`${offer.site}で${hotel.name}を予約する`}
+                                className="inline-flex whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2.5 font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                                href={offer.bookingUrl.trim()}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                              >
+                                予約サイトへ
+                              </a>
+                            ) : (
+                              <span className="inline-flex whitespace-nowrap rounded-lg bg-slate-100 px-4 py-2.5 font-bold text-slate-500">
+                                予約サイトで確認
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
