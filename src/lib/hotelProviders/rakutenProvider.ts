@@ -179,9 +179,14 @@ function getFirstRecord(value: unknown): Record<string, unknown> | null {
   return value.find(isRecord) ?? null;
 }
 
+function getRawHotelKeys(value: unknown): string[] {
+  return getObjectKeys(getFirstRecord(value));
+}
+
 function getHotelKeys(value: unknown): string[] {
-  if (!isRecord(value)) return [];
-  return getObjectKeys(getFirstRecord(value.hotel));
+  const rawHotel = getFirstRecord(value);
+  if (!rawHotel) return [];
+  return getObjectKeys(getFirstRecord(rawHotel.hotel));
 }
 
 function isRakutenHotelBasicInfo(value: unknown): value is RakutenHotelBasicInfo {
@@ -196,6 +201,28 @@ function getBasicInfoValue(value: unknown): RakutenHotelBasicInfo | null {
 }
 
 function extractHotelBasicInfo(rawHotel: unknown): ExtractedHotelBasicInfo | null {
+  if (Array.isArray(rawHotel)) {
+    const firstRawHotel = rawHotel[0];
+    const firstExtracted = extractHotelBasicInfo(firstRawHotel);
+    if (firstExtracted) {
+      return {
+        basicInfo: firstExtracted.basicInfo,
+        pattern: `rawHotel[0].${firstExtracted.pattern.replace(/^rawHotel\./, "")}`,
+      };
+    }
+
+    const extracted = rawHotel
+      .map(extractHotelBasicInfo)
+      .find((info): info is ExtractedHotelBasicInfo => info !== null);
+    if (extracted) {
+      return {
+        basicInfo: extracted.basicInfo,
+        pattern: `rawHotel.find(item => item.hotelBasicInfo).${extracted.pattern.replace(/^rawHotel\./, "")}`,
+      };
+    }
+    return null;
+  }
+
   if (!isRecord(rawHotel)) return null;
 
   const directBasicInfo = getBasicInfoValue(rawHotel.hotelBasicInfo);
@@ -287,6 +314,22 @@ function mergeRakutenHotelPart(
 }
 
 function normalizeRakutenHotelEntry(value: unknown): RakutenHotelEntry | null {
+  if (Array.isArray(value)) {
+    const entry: RakutenHotelEntry = {};
+    for (const part of value) {
+      const nestedEntry = normalizeRakutenHotelEntry(part);
+      if (!nestedEntry) continue;
+      if (nestedEntry.hotelBasicInfo && !entry.hotelBasicInfo) {
+        entry.hotelBasicInfo = nestedEntry.hotelBasicInfo;
+      }
+      if (nestedEntry.hotelDetailInfo && !entry.hotelDetailInfo) {
+        entry.hotelDetailInfo = nestedEntry.hotelDetailInfo;
+      }
+      if (nestedEntry.roomInfo) addRoomInfo(entry, nestedEntry.roomInfo);
+    }
+    return entry.hotelBasicInfo ? entry : null;
+  }
+
   if (!isRecord(value)) return null;
 
   const entry: RakutenHotelEntry = {};
@@ -384,8 +427,8 @@ async function fetchRakutenHotelsWithDebug(
     console.warn("Rakuten Travel API unexpected hotel list shape", {
       status: response.status,
       topLevelKeys: getObjectKeys(data),
-      hotelsIsArray: Array.isArray(data.hotels),
-      hotelsLength: null,
+    hotelsIsArray: Array.isArray(data.hotels),
+    hotelsLength: null,
       firstHotelKeys: [],
       hotelBasicInfoFound: false,
     });
@@ -437,7 +480,7 @@ async function fetchRakutenHotelsWithDebug(
     topLevelKeys: getObjectKeys(data),
     hotelsIsArray: Array.isArray(data.hotels),
     hotelsLength: rawHotels.length,
-    firstHotelKeys: getObjectKeys(rawHotels[0]),
+    firstHotelKeys: getRawHotelKeys(rawHotels[0]),
     firstHotelHotelKeys: getHotelKeys(rawHotels[0]),
     hotelBasicInfoFound,
     detectedPattern,
@@ -452,7 +495,7 @@ async function fetchRakutenHotelsWithDebug(
     hotels,
     debug: createRakutenDebug(rawHotels.length, hotels.length, warnings, {
       responseTopLevelKeys: getObjectKeys(data),
-      firstRawHotelKeys: getObjectKeys(rawHotels[0]),
+      firstRawHotelKeys: getRawHotelKeys(rawHotels[0]),
       firstRawHotelHotelKeys: getHotelKeys(rawHotels[0]),
       detectedPattern,
     }),
