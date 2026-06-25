@@ -1,4 +1,5 @@
 import { fetchHotels } from "@/lib/hotelApi";
+import { getHotelProvider } from "@/lib/hotelProviders";
 import { NextResponse } from "next/server";
 import { validateHotelSearch } from "@/lib/searchValidation";
 import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
     const middleClassCode = params.get("middleClassCode") ?? undefined;
     const smallClassCode = params.get("smallClassCode") ?? undefined;
     const detailClassCode = params.get("detailClassCode") ?? undefined;
+    const debug = params.get("debug") === "true";
     const hasCompleteStayCondition = Boolean(checkIn && checkOut && guests);
 
     if (hasCompleteStayCondition) {
@@ -31,18 +33,24 @@ export async function GET(request: Request) {
     }
 
     const providerNotices: string[] = [];
+    const searchOptions = {
+      keyword,
+      checkIn,
+      checkOut,
+      guests,
+      areaClassCode,
+      middleClassCode,
+      smallClassCode,
+      detailClassCode,
+      onNotice: (notice: string) => providerNotices.push(notice),
+    };
+    const result = debug
+      ? await getHotelProvider().getHotelsWithDebug?.(searchOptions)
+      : undefined;
     const response = NextResponse.json(
-      await fetchHotels({
-        keyword,
-        checkIn,
-        checkOut,
-        guests,
-        areaClassCode,
-        middleClassCode,
-        smallClassCode,
-        detailClassCode,
-        onNotice: (notice) => providerNotices.push(notice),
-      }),
+      debug && result
+        ? { hotels: result.hotels, debug: result.debug }
+        : await fetchHotels(searchOptions),
     );
     const hasAreaCode = Boolean(
       areaClassCode || middleClassCode || smallClassCode || detailClassCode,

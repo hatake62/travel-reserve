@@ -1,5 +1,5 @@
 import type { Hotel } from "@/types/hotel";
-import type { HotelSearchParams } from "@/types/search";
+import type { HotelProviderDebugInfo, HotelSearchParams } from "@/types/search";
 import {
   createRakutenParams,
   fetchRakutenApi,
@@ -55,6 +55,11 @@ type RakutenHotelResponse = {
   hotels?: unknown[];
   error?: string;
   error_description?: string;
+};
+
+export type RakutenHotelFetchResult = {
+  hotels: Hotel[];
+  debug: HotelProviderDebugInfo;
 };
 
 function parseRakutenResponse(body: string): RakutenHotelResponse | null {
@@ -158,40 +163,86 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function getObjectKeys(value: unknown): string[] {
+  return isRecord(value) ? Object.keys(value) : [];
+}
+
+function addRoomInfo(
+  entry: RakutenHotelEntry,
+  value: unknown,
+): void {
+  if (Array.isArray(value)) {
+    entry.roomInfo = [
+      ...(entry.roomInfo ?? []),
+      ...(value as NonNullable<RakutenHotelEntry["roomInfo"]>),
+    ];
+  } else if (isRecord(value)) {
+    entry.roomInfo = [
+      ...(entry.roomInfo ?? []),
+      value as NonNullable<RakutenHotelEntry["roomInfo"]>[number],
+    ];
+  }
+}
+
+function mergeRakutenHotelPart(
+  entry: RakutenHotelEntry,
+  part: Record<string, unknown>,
+): void {
+  if (isRecord(part.hotelBasicInfo)) {
+    entry.hotelBasicInfo = part.hotelBasicInfo as RakutenHotelBasicInfo;
+  }
+  if (isRecord(part.hotelDetailInfo)) {
+    entry.hotelDetailInfo =
+      part.hotelDetailInfo as RakutenHotelEntry["hotelDetailInfo"];
+  }
+  addRoomInfo(entry, part.roomInfo);
+}
+
 function normalizeRakutenHotelEntry(value: unknown): RakutenHotelEntry | null {
   if (!isRecord(value)) return null;
-  if (value.hotelBasicInfo) return value as RakutenHotelEntry;
 
-  const parts = Array.isArray(value.hotel) ? value.hotel : [];
   const entry: RakutenHotelEntry = {};
+  mergeRakutenHotelPart(entry, value);
+
+  const parts = Array.isArray(value.hotel)
+    ? value.hotel
+    : isRecord(value.hotel)
+    ? [value.hotel]
+    : [];
   for (const part of parts) {
     if (!isRecord(part)) continue;
-    if (isRecord(part.hotelBasicInfo)) {
-      entry.hotelBasicInfo = part.hotelBasicInfo as RakutenHotelBasicInfo;
+    mergeRakutenHotelPart(entry, part);
+
+    const nestedEntry = normalizeRakutenHotelEntry(part);
+    if (nestedEntry?.hotelBasicInfo && !entry.hotelBasicInfo) {
+      entry.hotelBasicInfo = nestedEntry.hotelBasicInfo;
     }
-    if (isRecord(part.hotelDetailInfo)) {
-      entry.hotelDetailInfo = part.hotelDetailInfo as RakutenHotelEntry["hotelDetailInfo"];
+    if (nestedEntry?.hotelDetailInfo && !entry.hotelDetailInfo) {
+      entry.hotelDetailInfo = nestedEntry.hotelDetailInfo;
     }
-    if (Array.isArray(part.roomInfo)) {
-      entry.roomInfo = [
-        ...(entry.roomInfo ?? []),
-        ...(part.roomInfo as NonNullable<RakutenHotelEntry["roomInfo"]>),
-      ];
-    } else if (isRecord(part.roomInfo)) {
-      entry.roomInfo = [
-        ...(entry.roomInfo ?? []),
-        part.roomInfo as NonNullable<RakutenHotelEntry["roomInfo"]>[number],
-      ];
-    }
+    if (nestedEntry?.roomInfo) addRoomInfo(entry, nestedEntry.roomInfo);
   }
   return entry.hotelBasicInfo ? entry : null;
 }
 
-async function fetchRakutenHotels(
+function createRakutenDebug(
+  rawCount: number,
+  mappedCount: number,
+  warnings: string[],
+): HotelProviderDebugInfo {
+  return {
+    provider: "rakuten",
+    rawCount,
+    mappedCount,
+    warnings,
+  };
+}
+
+async function fetchRakutenHotelsWithDebug(
   endpoint: string,
   params: URLSearchParams,
   mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
-): Promise<Hotel[]> {
+): Promise<RakutenHotelFetchResult> {
   const { response, responseBody, requestUrl } = await fetchRakutenApi(
     endpoint,
     params,
@@ -216,7 +267,10 @@ async function fetchRakutenHotels(
   }
 
   if (response.status === 404 && data?.error === "not_found") {
-    return [];
+    return {
+      hotels: [],
+      debug: createRakutenDebug(0, 0, ["楽天APIは0件を返しました。"]),
+    };
   }
 
   if (!response.ok || !data || data.error) {
@@ -233,26 +287,84 @@ async function fetchRakutenHotels(
   }
 
   if (!Array.isArray(data.hotels)) {
+    console.warn("Rakuten Travel API unexpected hotel list shape", {
+      status: response.status,
+      topLevelKeys: getObjectKeys(data),
+      hotelsIsArray: Array.isArray(data.hotels),
+      hotelsLength: null,
+      firstHotelKeys: [],
+      hotelBasicInfoFound: false,
+    });
     throw new Error("楽天トラベルAPIのホテル一覧レスポンス形式が不正です。");
   }
 
-  return data.hotels
+  const rawHotels = data.hotels;
+  const normalizedEntries = rawHotels
     .map(normalizeRakutenHotelEntry)
-    .filter((entry): entry is RakutenHotelEntry => entry !== null)
+    .filter((entry): entry is RakutenHotelEntry => entry !== null);
+  const hotels = normalizedEntries
     .map(mapper)
     .filter((hotel): hotel is Hotel => hotel !== null);
+  const hotelBasicInfoFound = normalizedEntries.some((entry) =>
+    Boolean(entry.hotelBasicInfo),
+  );
+  const warnings: string[] = [];
+
+  if (rawHotels.length === 0) {
+    warnings.push("楽天APIは0件を返しました。");
+  } else if (hotels.length === 0) {
+    warnings.push(
+      "楽天APIはホテル候補を返しましたが、Hotel型への変換結果が0件でした。",
+    );
+  }
+  if (!hotelBasicInfoFound && rawHotels.length > 0) {
+    warnings.push("楽天APIレスポンス内でhotelBasicInfoを検出できませんでした。");
+  }
+
+  const logPayload = {
+    status: response.status,
+    topLevelKeys: getObjectKeys(data),
+    hotelsIsArray: Array.isArray(data.hotels),
+    hotelsLength: rawHotels.length,
+    firstHotelKeys: getObjectKeys(rawHotels[0]),
+    hotelBasicInfoFound,
+  };
+  if (warnings.length > 0) {
+    console.warn("Rakuten Travel API hotel response diagnostics", logPayload);
+  } else {
+    console.info("Rakuten Travel API hotel response diagnostics", logPayload);
+  }
+
+  return {
+    hotels,
+    debug: createRakutenDebug(rawHotels.length, hotels.length, warnings),
+  };
+}
+
+async function fetchRakutenHotels(
+  endpoint: string,
+  params: URLSearchParams,
+  mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
+): Promise<Hotel[]> {
+  return (await fetchRakutenHotelsWithDebug(endpoint, params, mapper)).hotels;
 }
 
 export async function getRakutenHotelsByKeyword({
   keyword,
 }: { keyword?: string } = {}): Promise<Hotel[]> {
+  return (await getRakutenHotelsByKeywordWithDebug({ keyword })).hotels;
+}
+
+export async function getRakutenHotelsByKeywordWithDebug({
+  keyword,
+}: { keyword?: string } = {}): Promise<RakutenHotelFetchResult> {
   const params = createRakutenParams(getRakutenCredentials());
   params.set("keyword", keyword?.trim() || DEFAULT_KEYWORD);
   params.set("hits", "10");
   params.set("page", "1");
   params.set("sort", "standard");
 
-  return fetchRakutenHotels(KEYWORD_SEARCH_ENDPOINT, params);
+  return fetchRakutenHotelsWithDebug(KEYWORD_SEARCH_ENDPOINT, params);
 }
 
 function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
@@ -276,15 +388,21 @@ function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
 export async function getRakutenVacantHotels(
   options: RakutenVacantHotelParams = {},
 ): Promise<Hotel[]> {
+  return (await getRakutenVacantHotelsWithDebug(options)).hotels;
+}
+
+export async function getRakutenVacantHotelsWithDebug(
+  options: RakutenVacantHotelParams = {},
+): Promise<RakutenHotelFetchResult> {
   const { keyword, checkIn, checkOut, guests } = options;
 
   if (!checkIn || !checkOut || !guests) {
-    return getRakutenHotelsByKeyword({ keyword });
+    return getRakutenHotelsByKeywordWithDebug({ keyword });
   }
 
   // VacantHotelSearch does not accept a free-text keyword as its location.
   if (!hasVacantSearchArea(options)) {
-    return getRakutenHotelsByKeyword({ keyword });
+    return getRakutenHotelsByKeywordWithDebug({ keyword });
   }
 
   const params = createRakutenParams(getRakutenCredentials());
@@ -311,7 +429,7 @@ export async function getRakutenVacantHotels(
     params.set("searchRadius", String(options.searchRadius));
   }
 
-  return fetchRakutenHotels(
+  return fetchRakutenHotelsWithDebug(
     VACANT_HOTEL_SEARCH_ENDPOINT,
     params,
     mapRakutenVacantHotelToHotel,

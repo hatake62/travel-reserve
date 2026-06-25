@@ -315,6 +315,15 @@ https://travel-reserve.vercel.app/api/debug/provider-config
 8. `https://travel-reserve.vercel.app/api/hotels?keyword=東京` がJSONを返すことを確認する。
 9. トップページで東京を検索する。
 
+外部APIの0件調査:
+
+- まず `/api/hotels?keyword=東京` を確認する。
+- 0件の場合は `/api/hotels?keyword=東京&debug=true` を確認する。
+- `debug.rawCount` が0なら、外部API側が0件を返している。
+- `debug.rawCount` が1以上で `debug.mappedCount` が0なら、外部APIレスポンスからアプリの `Hotel` 型への変換処理に問題がある。
+- `debug.mappedCount` が1以上なら、通常の `/api/hotels?keyword=東京` でも `Hotel[]` が返る。
+- `debug=true` でもAPIキー、`applicationId`、`accessKey`、`affiliateId` の実値は返さない。
+
 じゃらんProvider確認:
 
 1. Vercelで `USE_MOCK_HOTELS=false` を設定する。

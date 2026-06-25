@@ -32,3 +32,10 @@ export type HotelSearchParams = {
   smallClassCode?: string;
   detailClassCode?: string;
 };
+
+export type HotelProviderDebugInfo = {
+  provider: string;
+  rawCount: number;
+  mappedCount: number;
+  warnings: string[];
+};
