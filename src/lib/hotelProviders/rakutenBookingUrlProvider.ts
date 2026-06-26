@@ -143,13 +143,13 @@ export async function fetchRakutenBookingLinks({
   const fallbackUrl = bestUrl || getSafeRawUrl(planListUrl || hotelInformationUrl);
   const dateParamsApplied = Boolean(bestUrl);
 
-  if (result.status === "not_found") {
+  if (result.status !== "available") {
     return {
       hotelId,
       checkInDate,
       checkOutDate,
       adults,
-      status: "not_found",
+      status: result.status,
       bestUrl: fallbackUrl,
       urlType,
       dateParamsApplied,

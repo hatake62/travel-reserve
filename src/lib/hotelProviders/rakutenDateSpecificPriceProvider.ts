@@ -11,7 +11,28 @@ import {
 const VACANT_HOTEL_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426";
 
-export type RakutenDateSpecificPriceStatus = "available" | "not_found";
+export type RakutenDateSpecificPriceStatus =
+  | "available"
+  | "not_found"
+  | "error"
+  | "invalid_hotel_id";
+
+export type RakutenPriceNotFoundReason =
+  | "invalid_hotel_id"
+  | "api_data_not_found"
+  | "api_http_error"
+  | "api_rate_limited"
+  | "no_daily_charge_in_response"
+  | "no_valid_total_price"
+  | "unknown";
+
+export type RakutenPriceAttempt = {
+  searchPattern: "0" | "1";
+  page: number;
+  result: "success" | "data_not_found" | "http_error" | "rate_limited";
+  httpStatus?: number;
+  errorType?: string;
+};
 
 export type RakutenDateSpecificLowestPrice = {
   hotelId: string;
@@ -33,6 +54,8 @@ export type RakutenDateSpecificLowestPrice = {
   searchPatternsTried: string[];
   pagesFetched: number;
   chargeFlags: string[];
+  notFoundReason?: RakutenPriceNotFoundReason;
+  attemptedRequests: RakutenPriceAttempt[];
   status: RakutenDateSpecificPriceStatus;
   warnings: string[];
 };
@@ -75,8 +98,13 @@ function getString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+export function extractRakutenHotelNo(hotelId: string): string | null {
+  const match = hotelId.match(/^rakuten-(\d+)$/);
+  return match ? match[1] : null;
+}
+
 export function getRakutenHotelNo(hotelId: string): string {
-  return hotelId.replace(/^rakuten-/, "").trim();
+  return extractRakutenHotelNo(hotelId) ?? "";
 }
 
 function findRecords(value: unknown): Record<string, unknown>[] {
@@ -308,6 +336,7 @@ function createNotFoundResult({
     chargeFlags: [],
     status: "not_found",
     warnings,
+    attemptedRequests: [],
   };
 }
 
@@ -322,9 +351,20 @@ export async function fetchRakutenDateSpecificLowestPrice({
   checkOutDate: string;
   adults: number;
 }): Promise<RakutenDateSpecificLowestPrice> {
-  const hotelNo = getRakutenHotelNo(hotelId);
+  const hotelNo = extractRakutenHotelNo(hotelId);
   if (!hotelNo) {
-    throw new Error("楽天施設番号を取得できませんでした。");
+    return {
+      ...createNotFoundResult({
+        hotelId,
+        hotelNo: "",
+        checkInDate,
+        checkOutDate,
+        adults,
+        warnings: ["楽天施設番号を取得できませんでした。"],
+      }),
+      status: "invalid_hotel_id",
+      notFoundReason: "invalid_hotel_id",
+    };
   }
 
   const searchPatternsTried: string[] = [];
@@ -334,43 +374,65 @@ export async function fetchRakutenDateSpecificLowestPrice({
   let rawPlanCount = 0;
   let planListUrl = "";
   let hotelInformationUrl = "";
+  let sawDataNotFound = false;
+  let requestErrorReason: RakutenPriceNotFoundReason | undefined;
+  const attemptedRequests: RakutenPriceAttempt[] = [];
 
   const fetchPage = async (searchPattern: "0" | "1", page: number) => {
-    const params = createRakutenParams(getRakutenCredentials());
-    params.set("hotelNo", hotelNo);
-    params.set("checkinDate", checkInDate);
-    params.set("checkoutDate", checkOutDate);
-    params.set("adultNum", String(adults));
-    params.set("roomNum", "1");
-    params.set("searchPattern", searchPattern);
-    params.set("sort", "+roomCharge");
-    params.set("responseType", "large");
-    params.set("hits", "30");
-    params.set("page", String(page));
-
-    const { response, responseBody, requestUrl } = await fetchRakutenApi(
-      VACANT_HOTEL_SEARCH_ENDPOINT,
-      params,
-      { next: { revalidate: 0 } },
-    );
+    const attempt: RakutenPriceAttempt = {
+      searchPattern,
+      page,
+      result: "http_error",
+    };
+    attemptedRequests.push(attempt);
     pagesFetched += 1;
-    const data = parseResponse(responseBody);
-    if (isNotFoundResponse(response, data, responseBody)) return;
-    if (!data || !isRecord(data) || !response.ok || data.error) {
-      console.error("Rakuten date specific price request failed", {
-        status: response.status,
-        responseBodySnippet: getRakutenResponseBodySnippet(responseBody),
-        url: maskRakutenUrl(requestUrl),
-      });
-      const detail = data?.error_description ?? data?.error ?? `HTTP ${response.status}`;
-      throw new Error(`楽天トラベルAPIから指定日最安値を取得できませんでした: ${detail}`);
+    try {
+      const params = createRakutenParams(getRakutenCredentials());
+      params.set("hotelNo", hotelNo);
+      params.set("checkinDate", checkInDate);
+      params.set("checkoutDate", checkOutDate);
+      params.set("adultNum", String(adults));
+      params.set("roomNum", "1");
+      params.set("searchPattern", searchPattern);
+      params.set("sort", "+roomCharge");
+      params.set("responseType", "large");
+      params.set("hits", "30");
+      params.set("page", String(page));
+
+      const { response, responseBody, requestUrl } = await fetchRakutenApi(
+        VACANT_HOTEL_SEARCH_ENDPOINT,
+        params,
+        { next: { revalidate: 0 } },
+      );
+      attempt.httpStatus = response.status;
+      const data = parseResponse(responseBody);
+      if (isNotFoundResponse(response, data, responseBody)) {
+        attempt.result = "data_not_found";
+        sawDataNotFound = true;
+        return;
+      }
+      if (!data || !isRecord(data) || !response.ok || data.error) {
+        attempt.result = response.status === 429 ? "rate_limited" : "http_error";
+        attempt.errorType = response.status === 429 ? "rate_limited" : "api_http_error";
+        requestErrorReason = response.status === 429 ? "api_rate_limited" : "api_http_error";
+        console.error("Rakuten date specific price request failed", {
+          status: response.status,
+          responseBodySnippet: getRakutenResponseBodySnippet(responseBody),
+          url: maskRakutenUrl(requestUrl),
+        });
+        return;
+      }
+      attempt.result = "success";
+      const basicInfo = findHotelBasicInfo(data.hotels);
+      planListUrl ||= getString(basicInfo?.planListUrl);
+      hotelInformationUrl ||= getString(basicInfo?.hotelInformationUrl);
+      const extracted = collectPlanPrices(data.hotels);
+      rawPlanCount += extracted.rawPlanCount;
+      allPrices.push(...extracted.prices);
+    } catch {
+      attempt.errorType = "api_http_error";
+      requestErrorReason = "api_http_error";
     }
-    const basicInfo = findHotelBasicInfo(data.hotels);
-    planListUrl ||= getString(basicInfo?.planListUrl);
-    hotelInformationUrl ||= getString(basicInfo?.hotelInformationUrl);
-    const extracted = collectPlanPrices(data.hotels);
-    rawPlanCount += extracted.rawPlanCount;
-    allPrices.push(...extracted.prices);
   };
 
   searchPatternsTried.push("1");
@@ -395,6 +457,12 @@ export async function fetchRakutenDateSpecificLowestPrice({
   const lowestPlan = totalPrices[0] ?? rakutenChargePrices[0];
 
   if (!lowestPlan) {
+    const notFoundReason = requestErrorReason ??
+      (sawDataNotFound && rawPlanCount === 0
+        ? "api_data_not_found"
+        : rawPlanCount > 0
+        ? "no_daily_charge_in_response"
+        : "no_valid_total_price");
     return {
       ...createNotFoundResult({
         hotelId,
@@ -407,8 +475,12 @@ export async function fetchRakutenDateSpecificLowestPrice({
         warnings: ["指定条件の料金を空室検索APIから取得できませんでした"],
       }),
       rawPlanCount,
+      extractedPriceCount: 0,
       searchPatternsTried,
       pagesFetched,
+      attemptedRequests,
+      notFoundReason,
+      status: requestErrorReason ? "error" : "not_found",
     };
   }
   if (lowestPlan.sourcePriceField === "dailyCharge.rakutenCharge") {
@@ -465,5 +537,6 @@ export async function fetchRakutenDateSpecificLowestPrice({
     ],
     status: "available",
     warnings,
+    attemptedRequests,
   };
 }

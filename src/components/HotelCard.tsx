@@ -59,7 +59,15 @@ export default function HotelCard({ hotel, checkIn, checkOut, adults }: HotelCar
             {!lowestOffer && (
               <p className="mt-1 text-xs font-medium text-slate-500">
                 {primaryOffer?.isDateSpecific
-                  ? "指定条件の料金は取得できませんでした。"
+                  ? primaryOffer.notFoundReason === "api_data_not_found"
+                    ? "指定条件の空室・料金が見つかりませんでした。"
+                    : primaryOffer.notFoundReason === "no_daily_charge_in_response"
+                    ? "料金情報を取得できませんでした。楽天トラベルで確認してください。"
+                    : primaryOffer.notFoundReason === "invalid_hotel_id"
+                    ? "施設番号を取得できませんでした。"
+                    : primaryOffer.notFoundReason === "api_http_error" || primaryOffer.notFoundReason === "api_rate_limited"
+                    ? "料金取得に失敗しました。時間をおいて再試行してください。"
+                    : "指定条件の料金は取得できませんでした。"
                   : "価格は予約サイトで確認してください。"}
               </p>
             )}

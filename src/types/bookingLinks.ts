@@ -1,4 +1,4 @@
-export type BookingLinkStatus = "available" | "not_found" | "error";
+export type BookingLinkStatus = "available" | "not_found" | "error" | "invalid_hotel_id";
 export type BookingUrlType =
   | "reserveUrl"
   | "planListUrlWithDate"

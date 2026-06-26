@@ -621,6 +621,14 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 
 `debug=true` では、`dateSpecificPriceEnabled`、`dateSpecificPriceHotelLimit`、`pricedHotelCount`、`notFoundCount`、`priceSourceField`、最大5件の `priceSamples` を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
 
+指定日価格の各`priceSamples`には、空室検索の試行状況も含まれます。`searchPatternsTried`が空、または`pagesFetched=0`の場合は、施設番号が不正などAPI呼び出し前の理由を確認します。`attemptedRequests`には検索パターン、ページ、結果、HTTPステータスの安全な概要が入り、URLや認証情報は含みません。
+
+- `api_data_not_found`: APIは呼び出したが、指定条件の空室・料金を返さなかった状態です。
+- `no_daily_charge_in_response`: APIレスポンスはあったが、料金フィールドを抽出できなかった状態です。
+- `invalid_hotel_id`: 楽天施設番号を取り出せなかった状態です。
+- `error`: HTTPエラーやレート制限など、取得処理が完了しなかった状態です。
+- `not_checked`: 一覧の補完対象外としてAPIを呼ばなかった状態です。
+
 ## ホテル検索のページング
 
 ホテル一覧はアプリ側で10件ずつ表示し、「前へ」「次へ」でページを移動できます。`page=2` 以降はURLクエリに保持されるため、更新や共有したURLでも同じページを開けます。検索条件、並び替え、フィルターを変更した場合は1ページ目に戻ります。

@@ -18,13 +18,18 @@ type DateSpecificPriceDebug = {
   hotelCount: number;
   pricedHotelCount: number;
   notFoundCount: number;
+  errorCount: number;
+  notFoundReasonCounts: Record<string, number>;
+  attemptedRequestCount: number;
+  checkedCount: number;
+  notCheckedCount: number;
   priceSourceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
   fallbackCount: number;
   priceSourceFieldCounts: Record<string, number>;
   priceExtractionWarnings: string[];
   priceSamples: Array<{
     hotelId: string | number;
-    status: "available" | "not_found";
+    status: "available" | "not_found" | "error" | "invalid_hotel_id";
     price: number | null;
     sourcePriceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
     matchedPlanCount: number;
@@ -32,6 +37,14 @@ type DateSpecificPriceDebug = {
     extractedPriceCount: number;
     searchPatternsTried: string[];
     pagesFetched: number;
+    notFoundReason?: string;
+    attemptedRequests: Array<{
+      searchPattern: "0" | "1";
+      page: number;
+      result: "success" | "data_not_found" | "http_error" | "rate_limited";
+      httpStatus?: number;
+      errorType?: string;
+    }>;
   }>;
 };
 
@@ -115,6 +128,7 @@ async function applyDateSpecificPrices(
           planName: result.price?.planName,
           roomName: result.price?.roomName,
           matchedPlanCount: result.price?.matchedPlanCount ?? 0,
+          notFoundReason: result.price?.notFoundReason,
           roomType:
             result.price?.planName ||
             result.price?.roomName ||
@@ -130,8 +144,30 @@ async function applyDateSpecificPrices(
 
   const pricedHotelCount = results.filter((result) => result.price?.price).length;
   const notFoundCount = results.filter(
-    (result) => result.price?.status === "not_found" || result.price === null,
+    (result) => result.price?.status === "not_found",
   ).length;
+  const errorCount = results.filter(
+    (result) => result.price?.status === "error" || result.price === null,
+  ).length;
+  const notFoundReasonCounts = results.reduce<Record<string, number>>(
+    (counts, result) => {
+      const reason = result.price?.notFoundReason;
+      if (reason) counts[reason] = (counts[reason] ?? 0) + 1;
+      return counts;
+    },
+    {},
+  );
+  const attemptedRequestCount = results.reduce(
+    (count, result) => count + (result.price?.attemptedRequests.length ?? 0),
+    0,
+  );
+  const checkedCount = results.filter(
+    (result) => (result.price?.attemptedRequests.length ?? 0) > 0,
+  ).length;
+  const notCheckedCount = Math.max(
+    0,
+    hotels.filter((hotel) => Boolean(getRakutenHotelId(hotel))).length - targetIndexes.length,
+  );
   const fallbackCount = results.filter(
     (result) => result.price?.sourcePriceField === "dailyCharge.rakutenCharge",
   ).length;
@@ -158,6 +194,11 @@ async function applyDateSpecificPrices(
       hotelCount: hotels.length,
       pricedHotelCount,
       notFoundCount,
+      errorCount,
+      notFoundReasonCounts,
+      attemptedRequestCount,
+      checkedCount,
+      notCheckedCount,
       priceSourceField: fallbackCount > 0 && pricedHotelCount === fallbackCount
         ? "dailyCharge.rakutenCharge"
         : "dailyCharge.total",
@@ -174,6 +215,8 @@ async function applyDateSpecificPrices(
         extractedPriceCount: result.price?.extractedPriceCount ?? 0,
         searchPatternsTried: result.price?.searchPatternsTried ?? [],
         pagesFetched: result.price?.pagesFetched ?? 0,
+        notFoundReason: result.price?.notFoundReason,
+        attemptedRequests: result.price?.attemptedRequests ?? [],
       })),
     },
   };
@@ -248,6 +291,11 @@ export async function GET(request: Request) {
       hotelCount: pageHotels.length,
       pricedHotelCount: 0,
       notFoundCount: 0,
+      errorCount: 0,
+      notFoundReasonCounts: {},
+      attemptedRequestCount: 0,
+      checkedCount: 0,
+      notCheckedCount: 0,
       priceSourceField: "dailyCharge.total" as const,
       fallbackCount: 0,
       priceSourceFieldCounts: {},
@@ -289,20 +337,16 @@ export async function GET(request: Request) {
               rawHotelCount: result.debug.rawCount,
               mergedHotelCount: hotels.length,
               displayedHotelCount: responseHotels.length,
-              dateSpecificPriceCheckedCount: Math.min(
-                DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
-                pageHotels.filter((hotel) => Boolean(getRakutenHotelId(hotel))).length,
-              ),
+              dateSpecificPriceCheckedCount: dateSpecificDebug.checkedCount,
               dateSpecificPriceAvailableCount: dateSpecificDebug.pricedHotelCount,
               dateSpecificPriceNotFoundCount: dateSpecificDebug.notFoundCount,
+              dateSpecificPriceErrorCount: dateSpecificDebug.errorCount,
+              notFoundReasonCounts: dateSpecificDebug.notFoundReasonCounts,
+              attemptedRequestCount: dateSpecificDebug.attemptedRequestCount,
               dateSpecificPriceFallbackCount: dateSpecificDebug.fallbackCount,
               priceSourceFieldCounts: dateSpecificDebug.priceSourceFieldCounts,
               priceExtractionWarnings: dateSpecificDebug.priceExtractionWarnings,
-              dateSpecificPriceNotCheckedCount: Math.max(
-                0,
-                pageHotels.filter((hotel) => Boolean(getRakutenHotelId(hotel))).length -
-                  DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
-              ),
+              dateSpecificPriceNotCheckedCount: dateSpecificDebug.notCheckedCount,
               rakutenPagesFetched: 2,
               dateSpecificPrice: dateSpecificDebug,
             },

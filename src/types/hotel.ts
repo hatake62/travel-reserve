@@ -13,6 +13,7 @@ export type HotelOffer = {
   planName?: string;
   roomName?: string;
   matchedPlanCount?: number;
+  notFoundReason?: string;
   roomType: string;
   hasBreakfast: boolean;
   cancellation: string;

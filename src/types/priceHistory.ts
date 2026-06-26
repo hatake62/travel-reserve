@@ -18,7 +18,7 @@ export type PriceSnapshot = {
   pagesFetched?: number;
   planName?: string;
   roomName?: string;
-  status?: "available" | "not_found";
+  status?: "available" | "not_found" | "error" | "invalid_hotel_id";
   warnings?: string[];
 };
 
