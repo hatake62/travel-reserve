@@ -599,11 +599,42 @@ export async function getRakutenVacantHotelsWithDebug(
     params.set("searchRadius", String(options.searchRadius));
   }
 
-  return fetchRakutenHotelsWithDebug(
-    VACANT_HOTEL_SEARCH_ENDPOINT,
-    params,
-    mapRakutenVacantHotelToHotel,
-  );
+  const fetchVacantHotels = (searchParams: URLSearchParams) =>
+    fetchRakutenHotelsWithDebug(
+      VACANT_HOTEL_SEARCH_ENDPOINT,
+      searchParams,
+      mapRakutenVacantHotelToHotel,
+    );
+
+  try {
+    return await fetchVacantHotels(params);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const isInvalidDetailClassCode =
+      message.includes("HTTP 400") &&
+      message.toLowerCase().includes("detailclasscode");
+
+    if (!isInvalidDetailClassCode || !params.has("detailClassCode")) {
+      throw error;
+    }
+
+    // GetAreaClass の階層データと VacantHotelSearch の詳細地区コードが
+    // 一時的に不整合な場合でも、中分類/小分類で検索を継続する。
+    const fallbackParams = new URLSearchParams(params);
+    fallbackParams.delete("detailClassCode");
+    const result = await fetchVacantHotels(fallbackParams);
+
+    return {
+      ...result,
+      debug: {
+        ...result.debug,
+        warnings: [
+          ...result.debug.warnings,
+          "選択した詳細地区コードを楽天APIが受け付けなかったため、広い地区条件で検索しました。",
+        ],
+      },
+    };
+  }
 }
 
 /** @deprecated Use getRakutenHotelsByKeyword or getRakutenVacantHotels. */
