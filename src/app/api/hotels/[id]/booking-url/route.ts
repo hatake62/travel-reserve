@@ -29,6 +29,7 @@ export async function GET(request: Request, { params }: BookingUrlRouteContext) 
     const checkInDate = searchParams.get("checkIn");
     const checkOutDate = searchParams.get("checkOut");
     const adults = parseAdults(searchParams.get("adults"));
+    const debug = searchParams.get("debug") === "true";
 
     if (!id.startsWith("rakuten-")) {
       return NextResponse.json(
@@ -56,7 +57,28 @@ export async function GET(request: Request, { params }: BookingUrlRouteContext) 
       adults,
     });
 
-    return NextResponse.json(bookingLinks);
+    return NextResponse.json(
+      debug
+        ? {
+            ...bookingLinks,
+            debug: {
+              hotelId: bookingLinks.hotelId,
+              hotelNo: bookingLinks.hotelNo,
+              checkInDate: bookingLinks.checkInDate,
+              checkOutDate: bookingLinks.checkOutDate,
+              adults: bookingLinks.adults,
+              usedSearchPattern: 1,
+              rawPlanCount: bookingLinks.rawPlanCount ?? 0,
+              urlType: bookingLinks.urlType,
+              dateParamsApplied: bookingLinks.dateParamsApplied,
+              hasReserveUrl: bookingLinks.hasReserveUrl ?? false,
+              hasPlanListUrl: bookingLinks.hasPlanListUrl ?? false,
+              hasHotelInformationUrl: bookingLinks.hasHotelInformationUrl ?? false,
+              warnings: bookingLinks.warnings,
+            },
+          }
+        : bookingLinks,
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "予約リンクの取得に失敗しました";

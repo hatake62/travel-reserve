@@ -2,6 +2,7 @@ import "server-only";
 
 import type { BookingLinksResponse } from "@/types/bookingLinks";
 import {
+  appendRakutenTravelSearchParams,
   fetchRakutenDateSpecificLowestPrice,
   getRakutenHotelNo,
 } from "./rakutenDateSpecificPriceProvider";
@@ -40,17 +41,23 @@ function findRecords(value: unknown): Record<string, unknown>[] {
   ];
 }
 
-function getFallbackUrl(value: unknown): string {
+function getFallbackUrls(value: unknown): {
+  planListUrl: string;
+  hotelInformationUrl: string;
+} {
   const basicInfo = findRecords(value).find((record) =>
     Boolean(record.hotelNo || record.planListUrl || record.hotelInformationUrl),
   );
-  return (
-    getString(basicInfo?.planListUrl) ||
-    getString(basicInfo?.hotelInformationUrl)
-  );
+  return {
+    planListUrl: getString(basicInfo?.planListUrl),
+    hotelInformationUrl: getString(basicInfo?.hotelInformationUrl),
+  };
 }
 
-async function fetchFallbackUrl(hotelNo: string): Promise<string> {
+async function fetchFallbackUrls(hotelNo: string): Promise<{
+  planListUrl: string;
+  hotelInformationUrl: string;
+}> {
   const params = createRakutenParams(getRakutenCredentials());
   params.set("hotelNo", hotelNo);
   params.set("responseType", "middle");
@@ -60,13 +67,29 @@ async function fetchFallbackUrl(hotelNo: string): Promise<string> {
     params,
     { next: { revalidate: 300 } },
   );
-  if (!response.ok) return "";
+  if (!response.ok) return { planListUrl: "", hotelInformationUrl: "" };
 
   try {
-    return getFallbackUrl(JSON.parse(responseBody));
+    return getFallbackUrls(JSON.parse(responseBody));
+  } catch {
+    return { planListUrl: "", hotelInformationUrl: "" };
+  }
+}
+
+function getSafeRawUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
   } catch {
     return "";
   }
+}
+
+function createDatedUrl(
+  url: string,
+  params: Pick<FetchRakutenBookingLinksParams, "checkInDate" | "checkOutDate" | "adults">,
+): string {
+  return appendRakutenTravelSearchParams(url, params);
 }
 
 export async function fetchRakutenBookingLinks({
@@ -86,10 +109,39 @@ export async function fetchRakutenBookingLinks({
     checkOutDate,
     adults,
   });
-  const fallbackUrl =
-    result.planListUrl ||
-    result.hotelInformationUrl ||
-    (result.status === "not_found" ? await fetchFallbackUrl(hotelNo) : "");
+  const detailFallback = result.status === "not_found"
+    ? await fetchFallbackUrls(hotelNo)
+    : { planListUrl: "", hotelInformationUrl: "" };
+  const planListUrl = result.planListUrl || detailFallback.planListUrl;
+  const hotelInformationUrl =
+    result.hotelInformationUrl || detailFallback.hotelInformationUrl;
+  const datedPlanListUrl = createDatedUrl(planListUrl, {
+    checkInDate,
+    checkOutDate,
+    adults,
+  });
+  const datedHotelInformationUrl = createDatedUrl(hotelInformationUrl, {
+    checkInDate,
+    checkOutDate,
+    adults,
+  });
+  const datedReserveUrl = createDatedUrl(result.reserveUrl, {
+    checkInDate,
+    checkOutDate,
+    adults,
+  });
+  const bestUrl = datedReserveUrl || datedPlanListUrl || datedHotelInformationUrl;
+  const urlType = datedReserveUrl
+    ? "reserveUrl"
+    : datedPlanListUrl
+    ? "planListUrlWithDate"
+    : datedHotelInformationUrl
+    ? "hotelInformationUrlWithDate"
+    : planListUrl || hotelInformationUrl
+    ? "fallbackWithoutDate"
+    : "none";
+  const fallbackUrl = bestUrl || getSafeRawUrl(planListUrl || hotelInformationUrl);
+  const dateParamsApplied = Boolean(bestUrl);
 
   if (result.status === "not_found") {
     return {
@@ -98,21 +150,31 @@ export async function fetchRakutenBookingLinks({
       checkOutDate,
       adults,
       status: "not_found",
-      planListUrl: result.planListUrl,
+      bestUrl: fallbackUrl,
+      urlType,
+      dateParamsApplied,
+      planListUrl: datedPlanListUrl,
       bestReserveUrl: "",
       fallbackUrl,
       links: [],
       price: null,
       sourcePriceField: result.sourcePriceField,
       matchedPlanCount: 0,
+      hotelNo,
+      rawPlanCount: 0,
+      hasReserveUrl: false,
+      hasPlanListUrl: Boolean(planListUrl),
+      hasHotelInformationUrl: Boolean(hotelInformationUrl),
       warnings: [
         ...result.warnings,
-        "通常の楽天トラベルページを開きます。",
+        dateParamsApplied
+          ? "指定条件を付けた楽天トラベルページを開きます。"
+          : "指定条件を反映できない可能性があります。楽天トラベル側で日付を再指定してください。",
       ],
     };
   }
 
-  const linkUrl = result.bookingUrl || fallbackUrl;
+  const linkUrl = bestUrl || result.bookingUrl || fallbackUrl;
   const links = linkUrl
     ? [
         {
@@ -132,13 +194,26 @@ export async function fetchRakutenBookingLinks({
     checkOutDate,
     adults,
     status: "available",
-    planListUrl: result.planListUrl,
-    bestReserveUrl: result.bookingUrl,
+    bestUrl: linkUrl,
+    urlType,
+    dateParamsApplied,
+    planListUrl: datedPlanListUrl,
+    bestReserveUrl: linkUrl,
     fallbackUrl,
     links,
     price: result.price,
     sourcePriceField: result.sourcePriceField,
     matchedPlanCount: result.matchedPlanCount,
-    warnings: result.warnings,
+    hotelNo,
+    rawPlanCount: result.matchedPlanCount,
+    hasReserveUrl: Boolean(result.reserveUrl),
+    hasPlanListUrl: Boolean(planListUrl),
+    hasHotelInformationUrl: Boolean(hotelInformationUrl),
+    warnings: [
+      ...result.warnings,
+      ...(urlType === "fallbackWithoutDate"
+        ? ["指定条件を反映できない可能性があります。楽天トラベル側で日付を再指定してください。"]
+        : []),
+    ],
   };
 }

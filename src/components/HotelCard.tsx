@@ -2,6 +2,7 @@ import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
 import FavoriteButton from "@/components/FavoriteButton";
 import HotelImage from "@/components/HotelImage";
+import RakutenBookingButton from "@/components/RakutenBookingButton";
 import {
   formatPrice,
   getLowestValidOffer,
@@ -11,9 +12,12 @@ import {
 
 type HotelCardProps = {
   hotel: Hotel;
+  checkIn?: string;
+  checkOut?: string;
+  adults?: number;
 };
 
-export default function HotelCard({ hotel }: HotelCardProps) {
+export default function HotelCard({ hotel, checkIn, checkOut, adults }: HotelCardProps) {
   const sortedOffers = sortOffersByPrice(hotel.offers);
   const lowestOffer = getLowestValidOffer(sortedOffers);
   const primaryOffer = lowestOffer ?? sortedOffers[0];
@@ -103,7 +107,15 @@ export default function HotelCard({ hotel }: HotelCardProps) {
                         <p className="text-lg font-bold text-slate-950">
                           {formatPrice(offer.price)}
                         </p>
-                        {bookingUrl ? (
+                        {offer.site === "楽天トラベル" ? (
+                          <RakutenBookingButton
+                            adults={adults}
+                            checkIn={checkIn}
+                            checkOut={checkOut}
+                            fallbackUrl={bookingUrl}
+                            hotelId={hotel.id}
+                          />
+                        ) : bookingUrl ? (
                           <a
                             aria-label={`${offer.site}で${hotel.name}を予約する`}
                             className="mt-2 inline-flex rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"

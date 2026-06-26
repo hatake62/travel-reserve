@@ -267,7 +267,13 @@ function HomeContent() {
           ) : filteredHotels.length > 0 ? (
             <div className="grid items-start gap-6 lg:grid-cols-2">
               {filteredHotels.map((hotel) => (
-                <HotelCard hotel={hotel} key={hotel.id} />
+                <HotelCard
+                  adults={searchCondition.guests}
+                  checkIn={searchCondition.checkIn}
+                  checkOut={searchCondition.checkOut}
+                  hotel={hotel}
+                  key={hotel.id}
+                />
               ))}
             </div>
           ) : (

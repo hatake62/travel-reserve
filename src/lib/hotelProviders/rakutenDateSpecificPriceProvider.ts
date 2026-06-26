@@ -21,6 +21,7 @@ export type RakutenDateSpecificLowestPrice = {
   adults: number;
   price: number | null;
   bookingUrl: string;
+  reserveUrl: string;
   planListUrl: string;
   hotelInformationUrl: string;
   planName?: string;
@@ -175,6 +176,40 @@ export function createRakutenPlanDetailUrl({
   }
 }
 
+/** 楽天トラベル画面用URLへ、指定した宿泊条件を安全に反映する。 */
+export function appendRakutenTravelSearchParams(
+  rawUrl: string,
+  {
+    checkInDate,
+    checkOutDate,
+    adults,
+    roomNum = 1,
+  }: {
+    checkInDate: string;
+    checkOutDate: string;
+    adults: number;
+    roomNum?: number;
+  },
+): string {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return "";
+
+    url.searchParams.set("checkinDate", checkInDate);
+    url.searchParams.set("checkoutDate", checkOutDate);
+    url.searchParams.set("adultNum", String(adults));
+    url.searchParams.set("roomNum", String(roomNum));
+    url.searchParams.set("f_checkin", checkInDate);
+    url.searchParams.set("f_checkout", checkOutDate);
+    url.searchParams.set("f_otona_su", String(adults));
+    url.searchParams.set("f_heya_su", String(roomNum));
+    applyStayParams(url, checkInDate, checkOutDate, adults);
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function isNotFoundResponse(
   response: Response,
   data: RakutenResponse | null,
@@ -215,6 +250,7 @@ function createNotFoundResult({
     adults,
     price: null,
     bookingUrl: "",
+    reserveUrl: "",
     planListUrl,
     hotelInformationUrl,
     sourcePriceField: "dailyCharge.total",
@@ -299,15 +335,21 @@ export async function fetchRakutenDateSpecificLowestPrice({
   }
 
   const bookingUrl =
-    createRakutenPlanDetailUrl({
-      reserveUrl: lowestPlan.reserveUrl,
-      hotelNo,
+    appendRakutenTravelSearchParams(lowestPlan.reserveUrl, {
       checkInDate,
       checkOutDate,
       adults,
     }) ||
-    planListUrl ||
-    hotelInformationUrl;
+    appendRakutenTravelSearchParams(planListUrl, {
+      checkInDate,
+      checkOutDate,
+      adults,
+    }) ||
+    appendRakutenTravelSearchParams(hotelInformationUrl, {
+      checkInDate,
+      checkOutDate,
+      adults,
+    });
 
   return {
     hotelId,
@@ -317,6 +359,7 @@ export async function fetchRakutenDateSpecificLowestPrice({
     adults,
     price: lowestPlan.price,
     bookingUrl,
+    reserveUrl: lowestPlan.reserveUrl,
     planListUrl,
     hotelInformationUrl,
     planName: lowestPlan.planName,

@@ -587,6 +587,14 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 /api/hotels/rakuten-78182/booking-url?checkIn=2026-08-10&checkOut=2026-08-11&adults=2
 ```
 
+### 指定条件付き楽天トラベル予約リンク
+
+宿泊日・チェックアウト日・人数を指定した場合、空室検索APIへ同じ条件を指定して予約リンクを取得します。最優先は `roomBasicInfo.reserveUrl` です。取得したURLには `checkinDate`、`checkoutDate`、`adultNum`、`roomNum` と楽天トラベル画面用の宿泊条件パラメータを追加します。
+
+`reserveUrl` がない場合は、`planListUrl`、`hotelInformationUrl`、既存の予約URLの順に同じ条件を付与してフォールバックします。楽天側の仕様により、フォールバックURLでは日付が反映されない場合があり、そのときは画面で通常ページであることを示し、楽天トラベル側で日付を再指定するよう案内します。
+
+予約リンクAPIのレスポンスには、URLの種別を表す `urlType` と、宿泊条件をURLに追加できたかを表す `dateParamsApplied` が含まれます。`debug=true` を付けると、施設番号、検索パターン、プラン数、各URLの有無などの安全な診断情報を確認できます。APIキー、DB接続文字列、Cronシークレットは返しません。
+
 ## 楽天トラベル価格表示の扱い
 
 楽天トラベルAPIでは、宿泊日未指定の参考価格と、宿泊日・人数を指定した空室検索の価格を分けて扱います。

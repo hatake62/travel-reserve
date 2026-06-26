@@ -259,7 +259,10 @@ export default function PriceHistorySection({
           <span className="text-sm font-bold text-slate-700">チェックイン</span>
           <input
             className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            onChange={(event) => setCheckInDate(event.target.value)}
+            onChange={(event) => {
+              setCheckInDate(event.target.value);
+              setBookingLinks(null);
+            }}
             type="date"
             value={checkInDate}
           />
@@ -268,7 +271,10 @@ export default function PriceHistorySection({
           <span className="text-sm font-bold text-slate-700">チェックアウト</span>
           <input
             className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            onChange={(event) => setCheckOutDate(event.target.value)}
+            onChange={(event) => {
+              setCheckOutDate(event.target.value);
+              setBookingLinks(null);
+            }}
             type="date"
             value={checkOutDate}
           />
@@ -279,7 +285,10 @@ export default function PriceHistorySection({
             className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-100"
             max={10}
             min={1}
-            onChange={(event) => setAdults(Number(event.target.value))}
+            onChange={(event) => {
+              setAdults(Number(event.target.value));
+              setBookingLinks(null);
+            }}
             type="number"
             value={adults}
           />
@@ -365,7 +374,13 @@ export default function PriceHistorySection({
                 楽天トラベルの予約リンク
               </p>
               <p className="mt-1 text-xs leading-5 text-slate-600">
-                {bookingLinks.status === "available"
+                {bookingLinks.urlType === "reserveUrl"
+                  ? "指定条件に対応した楽天トラベルの予約ページを開きます。"
+                  : bookingLinks.urlType === "planListUrlWithDate"
+                  ? "指定条件を付けた楽天トラベルのプラン一覧を開きます。"
+                  : bookingLinks.urlType === "fallbackWithoutDate"
+                  ? "指定条件を反映できない可能性があります。楽天トラベル側で日付を再指定してください。"
+                  : bookingLinks.status === "available"
                   ? "指定条件に対応する予約リンク候補を取得しました。"
                   : "指定条件に合う空室・料金は見つかりませんでした。"}
               </p>
@@ -376,17 +391,17 @@ export default function PriceHistorySection({
               </div>
             )}
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              {bookingLinks.bestReserveUrl && (
+              {bookingLinks.bestUrl && (
                 <a
                   className="inline-flex h-11 items-center justify-center rounded-lg bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"
-                  href={bookingLinks.bestReserveUrl}
+                  href={bookingLinks.bestUrl}
                   rel="noopener noreferrer"
                   target="_blank"
                 >
                   最安プランを楽天トラベルで見る
                 </a>
               )}
-              {bookingLinks.planListUrl && (
+              {bookingLinks.planListUrl && bookingLinks.planListUrl !== bookingLinks.bestUrl && (
                 <a
                   className="inline-flex h-11 items-center justify-center rounded-lg border border-sky-700 px-5 text-sm font-bold text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200"
                   href={bookingLinks.planListUrl}
@@ -396,7 +411,7 @@ export default function PriceHistorySection({
                   指定条件でプラン一覧を見る
                 </a>
               )}
-              {!bookingLinks.bestReserveUrl &&
+              {!bookingLinks.bestUrl &&
                 !bookingLinks.planListUrl &&
                 bookingLinks.fallbackUrl && (
                   <a
@@ -408,7 +423,7 @@ export default function PriceHistorySection({
                     通常の楽天トラベルページを開く
                   </a>
                 )}
-              {!bookingLinks.bestReserveUrl &&
+              {!bookingLinks.bestUrl &&
                 !bookingLinks.planListUrl &&
                 !bookingLinks.fallbackUrl && (
                   <span className="inline-flex h-11 items-center rounded-lg bg-slate-100 px-5 text-sm font-bold text-slate-500">
