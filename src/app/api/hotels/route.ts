@@ -1,4 +1,3 @@
-import { fetchHotels } from "@/lib/hotelApi";
 import { getHotelProvider } from "@/lib/hotelProviders";
 import { fetchRakutenDateSpecificLowestPrice } from "@/lib/hotelProviders/rakutenDateSpecificPriceProvider";
 import { NextResponse } from "next/server";
@@ -7,6 +6,8 @@ import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
 import type { Hotel } from "@/types/hotel";
 
 const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = 10;
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 30;
 
 type DateSpecificPriceDebug = {
   checkInDate?: string;
@@ -30,6 +31,12 @@ function getRakutenHotelId(hotel: Hotel): string | null {
   if (String(hotel.id).startsWith("rakuten-")) return String(hotel.id);
   const providerId = hotel.providerIds?.rakuten;
   return providerId ? `rakuten-${providerId}` : null;
+}
+
+function parsePositiveInteger(value: string | null, defaultValue: number, max?: number): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) return defaultValue;
+  return max ? Math.min(parsed, max) : parsed;
 }
 
 async function applyDateSpecificPrices(
@@ -149,6 +156,8 @@ export async function GET(request: Request) {
     const middleClassCode = params.get("middleClassCode") ?? undefined;
     const smallClassCode = params.get("smallClassCode") ?? undefined;
     const detailClassCode = params.get("detailClassCode") ?? undefined;
+    const page = parsePositiveInteger(params.get("page"), 1);
+    const limit = parsePositiveInteger(params.get("limit"), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const debug = params.get("debug") === "true";
     const hasCompleteStayCondition = Boolean(checkIn && checkOut && guests);
 
@@ -177,39 +186,83 @@ export async function GET(request: Request) {
       detailClassCode,
       onNotice: (notice: string) => providerNotices.push(notice),
     };
-    const result = debug
-      ? await getHotelProvider().getHotelsWithDebug?.(searchOptions)
-      : undefined;
-    const hotels = result ? result.hotels : await fetchHotels(searchOptions);
+    const result = await getHotelProvider().getHotelsWithDebug?.(searchOptions);
+    if (!result) throw new Error("ホテルProviderの検索結果を取得できませんでした。");
+    const hotels = result.hotels;
+    const totalBeforePagination = hotels.length;
+    const totalPages = Math.max(1, Math.ceil(totalBeforePagination / limit));
+    const resolvedPage = Math.min(page, totalPages);
+    const offset = (resolvedPage - 1) * limit;
+    const pageHotels = hotels.slice(offset, offset + limit);
     const dateSpecific =
       hasCompleteStayCondition && checkIn && checkOut && guests
-        ? await applyDateSpecificPrices(hotels, { checkIn, checkOut, guests })
+        ? await applyDateSpecificPrices(pageHotels, { checkIn, checkOut, guests })
         : null;
-    const responseHotels = dateSpecific?.hotels ?? hotels;
+    const responseHotels = dateSpecific?.hotels ?? pageHotels;
     const dateSpecificDebug = dateSpecific?.debug ?? {
       checkInDate: checkIn,
       checkOutDate: checkOut,
       adults: guests,
       dateSpecificPriceEnabled: false,
       dateSpecificPriceHotelLimit: DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
-      hotelCount: hotels.length,
+      hotelCount: pageHotels.length,
       pricedHotelCount: 0,
       notFoundCount: 0,
       priceSourceField: "dailyCharge.total" as const,
       priceSamples: [],
     };
-    const response = NextResponse.json(
-      debug && result
+    const fallbackWarnings = result.debug.warnings.filter((warning) =>
+      warning.includes("周辺エリア"),
+    );
+    const responseBody = {
+      hotels: responseHotels,
+      pagination: {
+        page: resolvedPage,
+        limit,
+        total: totalBeforePagination,
+        totalPages,
+        hasNext: resolvedPage < totalPages,
+        hasPrev: resolvedPage > 1,
+      },
+      warnings: [...fallbackWarnings, ...providerNotices],
+      ...(debug
         ? {
-            hotels: responseHotels,
             debug: {
               ...result.debug,
               ...dateSpecificDebug,
+              keyword: keyword ?? "",
+              appPage: resolvedPage,
+              appLimit: limit,
+              appOffset: offset,
+              totalBeforePagination,
+              totalAfterMerge: hotels.length,
+              returnedCount: responseHotels.length,
+              totalPages,
+              hasNext: resolvedPage < totalPages,
+              hasPrev: resolvedPage > 1,
+              areaSearchLevelUsed: smallClassCode ? "smallClassCode" : middleClassCode ? "middleClassCode" : "keyword",
+              fallbackSteps: fallbackWarnings,
+              rawHotelCount: result.debug.rawCount,
+              mergedHotelCount: hotels.length,
+              displayedHotelCount: responseHotels.length,
+              dateSpecificPriceCheckedCount: Math.min(
+                DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
+                pageHotels.filter((hotel) => Boolean(getRakutenHotelId(hotel))).length,
+              ),
+              dateSpecificPriceAvailableCount: dateSpecificDebug.pricedHotelCount,
+              dateSpecificPriceNotFoundCount: dateSpecificDebug.notFoundCount,
+              dateSpecificPriceNotCheckedCount: Math.max(
+                0,
+                pageHotels.filter((hotel) => Boolean(getRakutenHotelId(hotel))).length -
+                  DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
+              ),
+              rakutenPagesFetched: 2,
               dateSpecificPrice: dateSpecificDebug,
             },
           }
-        : responseHotels,
-    );
+        : {}),
+    };
+    const response = NextResponse.json(responseBody);
     const hasAreaCode = Boolean(
       areaClassCode || middleClassCode || smallClassCode || detailClassCode,
     );

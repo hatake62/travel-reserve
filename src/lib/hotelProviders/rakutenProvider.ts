@@ -1,5 +1,6 @@
 import type { Hotel } from "@/types/hotel";
 import type { HotelProviderDebugInfo, HotelSearchParams } from "@/types/search";
+import { mergeHotelsByIdentity } from "@/lib/hotelMerge";
 import {
   createRakutenParams,
   fetchRakutenApi,
@@ -15,6 +16,9 @@ const HOTEL_DETAIL_ENDPOINT =
 const VACANT_HOTEL_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426";
 const DEFAULT_KEYWORD = "東京";
+const RAKUTEN_LIST_HITS = 30;
+const RAKUTEN_LIST_PAGE_COUNT = 2;
+const MIN_AREA_RESULT_COUNT = 10;
 
 type RakutenHotelBasicInfo = {
   hotelNo?: number | string | null;
@@ -515,6 +519,38 @@ async function fetchRakutenHotels(
   return (await fetchRakutenHotelsWithDebug(endpoint, params, mapper)).hotels;
 }
 
+async function fetchRakutenHotelPages(
+  endpoint: string,
+  params: URLSearchParams,
+  mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
+): Promise<RakutenHotelFetchResult> {
+  const pages = await Promise.all(
+    Array.from({ length: RAKUTEN_LIST_PAGE_COUNT }, async (_, index) => {
+      const pageParams = new URLSearchParams(params);
+      pageParams.set("page", String(index + 1));
+      return fetchRakutenHotelsWithDebug(endpoint, pageParams, mapper);
+    }),
+  );
+  const warnings = pages.flatMap((result) => result.debug.warnings);
+  const hotels = mergeHotelsByIdentity(pages.flatMap((result) => result.hotels));
+  const firstDebug = pages[0]?.debug;
+
+  return {
+    hotels,
+    debug: createRakutenDebug(
+      pages.reduce((sum, result) => sum + result.debug.rawCount, 0),
+      hotels.length,
+      warnings,
+      {
+        responseTopLevelKeys: firstDebug?.responseTopLevelKeys,
+        firstRawHotelKeys: firstDebug?.firstRawHotelKeys,
+        firstRawHotelHotelKeys: firstDebug?.firstRawHotelHotelKeys,
+        detectedPattern: firstDebug?.detectedPattern,
+      },
+    ),
+  };
+}
+
 export async function getRakutenHotelsByKeyword({
   keyword,
 }: { keyword?: string } = {}): Promise<Hotel[]> {
@@ -526,11 +562,10 @@ export async function getRakutenHotelsByKeywordWithDebug({
 }: { keyword?: string } = {}): Promise<RakutenHotelFetchResult> {
   const params = createRakutenParams(getRakutenCredentials());
   params.set("keyword", keyword?.trim() || DEFAULT_KEYWORD);
-  params.set("hits", "10");
-  params.set("page", "1");
+  params.set("hits", String(RAKUTEN_LIST_HITS));
   params.set("sort", "standard");
 
-  return fetchRakutenHotelsWithDebug(KEYWORD_SEARCH_ENDPOINT, params);
+  return fetchRakutenHotelPages(KEYWORD_SEARCH_ENDPOINT, params);
 }
 
 function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
@@ -577,9 +612,10 @@ export async function getRakutenVacantHotelsWithDebug(
   params.set("checkoutDate", checkOut);
   params.set("adultNum", String(guests));
   params.set("roomNum", "1");
-  params.set("hits", "10");
-  params.set("page", "1");
-  params.set("searchPattern", "1");
+  params.set("hits", String(RAKUTEN_LIST_HITS));
+  // 一覧はホテル単位で取得する。プラン単位の searchPattern=1 は、
+  // 同一ホテルのプランに偏りやすいため指定日最安値の補完時だけに使う。
+  params.set("searchPattern", "0");
   params.set("sort", "+roomCharge");
   params.set("responseType", "large");
 
@@ -588,11 +624,9 @@ export async function getRakutenVacantHotelsWithDebug(
     area?.areaClassCode ?? options.areaClassCode ?? options.largeClassCode;
   const middleClassCode = area?.middleClassCode ?? options.middleClassCode;
   const smallClassCode = area?.smallClassCode ?? options.smallClassCode;
-  const detailClassCode = area?.detailClassCode ?? options.detailClassCode;
   if (largeClassCode) params.set("largeClassCode", largeClassCode);
   if (middleClassCode) params.set("middleClassCode", middleClassCode);
   if (smallClassCode) params.set("smallClassCode", smallClassCode);
-  if (detailClassCode) params.set("detailClassCode", detailClassCode);
   if (options.latitude !== undefined) params.set("latitude", String(options.latitude));
   if (options.longitude !== undefined) params.set("longitude", String(options.longitude));
   if (options.searchRadius !== undefined) {
@@ -600,14 +634,52 @@ export async function getRakutenVacantHotelsWithDebug(
   }
 
   const fetchVacantHotels = (searchParams: URLSearchParams) =>
-    fetchRakutenHotelsWithDebug(
+    fetchRakutenHotelPages(
       VACANT_HOTEL_SEARCH_ENDPOINT,
       searchParams,
       mapRakutenVacantHotelToHotel,
     );
+  const fallBackToKeyword = async (): Promise<RakutenHotelFetchResult> => {
+    const keywordResult = await getRakutenHotelsByKeywordWithDebug({ keyword });
+    return {
+      ...keywordResult,
+      debug: {
+        ...keywordResult.debug,
+        warnings: [
+          ...keywordResult.debug.warnings,
+          "指定した地区では候補が見つからなかったため、目的地キーワードで検索しました。",
+        ],
+      },
+    };
+  };
 
   try {
-    return await fetchVacantHotels(params);
+    const narrowResult = await fetchVacantHotels(params);
+    if (!smallClassCode || narrowResult.hotels.length >= MIN_AREA_RESULT_COUNT) {
+      return narrowResult.hotels.length > 0 || !keyword
+        ? narrowResult
+        : fallBackToKeyword();
+    }
+
+    const broaderParams = new URLSearchParams(params);
+    broaderParams.delete("smallClassCode");
+    const broadResult = await fetchVacantHotels(broaderParams);
+    if (broadResult.hotels.length <= narrowResult.hotels.length) {
+      return narrowResult.hotels.length > 0 || !keyword
+        ? narrowResult
+        : fallBackToKeyword();
+    }
+
+    return {
+      ...broadResult,
+      debug: {
+        ...broadResult.debug,
+        warnings: [
+          ...broadResult.debug.warnings,
+          "指定した地区では候補が少なかったため、周辺エリアも含めて検索しました。",
+        ],
+      },
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const isInvalidDetailClassCode =

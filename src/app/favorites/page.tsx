@@ -39,7 +39,7 @@ export default function FavoritesPage() {
       setError(null);
     }
     fetchHotels({ signal: controller.signal })
-      .then(setHotels)
+      .then((data) => setHotels(data.hotels))
       .catch((error: unknown) => {
         if (error instanceof Error && error.name === "AbortError") return;
         setError({
@@ -61,7 +61,7 @@ export default function FavoritesPage() {
     const controller = new AbortController();
 
     fetchHotels({ signal: controller.signal })
-      .then(setHotels)
+      .then((data) => setHotels(data.hotels))
       .catch((error: unknown) => {
         if (error instanceof Error && error.name === "AbortError") return;
         setError({

@@ -18,6 +18,7 @@ export type SearchCondition = {
   maxPrice: number | null;
   site: BookingSite;
   breakfastOnly: boolean;
+  page: number;
   rakutenAreaCandidate?: RakutenAreaCandidate;
 };
 
@@ -31,6 +32,8 @@ export type HotelSearchParams = {
   middleClassCode?: string;
   smallClassCode?: string;
   detailClassCode?: string;
+  page?: number;
+  limit?: number;
 };
 
 export type HotelProviderDebugInfo = {

@@ -33,6 +33,7 @@
 - お気に入り一覧
 - localStorageによるお気に入り保存
 - 検索条件のURLクエリ反映
+- ホテル検索結果のページング
 - ホテル画像がない場合の代替表示
 - ローディング・エラー・0件表示
 - Provider設定確認API
@@ -609,6 +610,41 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 ```
 
 `debug=true` では、`dateSpecificPriceEnabled`、`dateSpecificPriceHotelLimit`、`pricedHotelCount`、`notFoundCount`、`priceSourceField`、最大5件の `priceSamples` を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
+
+## ホテル検索のページング
+
+ホテル一覧はアプリ側で10件ずつ表示し、「前へ」「次へ」でページを移動できます。`page=2` 以降はURLクエリに保持されるため、更新や共有したURLでも同じページを開けます。検索条件、並び替え、フィルターを変更した場合は1ページ目に戻ります。
+
+`/api/hotels` は `page` と `limit` を受け取ります。`page` の既定値は1、`limit` の既定値は10、上限は30です。通常レスポンスは次の形式です。
+
+```json
+{
+  "hotels": [],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 42,
+    "totalPages": 5,
+    "hasNext": true,
+    "hasPrev": false
+  },
+  "warnings": []
+}
+```
+
+楽天APIからは一覧候補として最大2ページ×30件を取得し、名寄せ後にアプリ側でページ分割します。楽天APIの`page`は候補を多く集めるためのページであり、アプリの`page`は画面に表示する10件単位のページです。
+
+宿泊日・人数を指定した一覧検索では、ホテル候補を広く得るため`searchPattern=0`を使います。指定日の最安値を補完する個別検索だけは`searchPattern=1`を使い、現在表示中のページのホテルを対象にします。取得できなかったホテルは一覧から除外せず、「指定条件の料金未取得」または予約サイトでの確認対象として表示します。
+
+地区候補に小分類コードがある場合はまず小分類で検索し、候補が少なければ中分類へ広げます。周辺エリアを含めた検索になった場合は画面に注意文を表示します。
+
+ページングと候補数の確認例:
+
+```text
+/api/hotels?keyword=栃木&checkIn=2026-07-25&checkOut=2026-07-26&guests=2&page=2&limit=10&debug=true
+```
+
+`debug=true` では、アプリ側のページ番号・offset・件数、楽天APIの取得ページ数、地区フォールバック、指定日価格補完の件数を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
 
 ## 楽天地区候補検索
 

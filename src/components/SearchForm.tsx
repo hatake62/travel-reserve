@@ -112,6 +112,7 @@ export default function SearchForm({
       maxPrice: maxPrice === "" ? null : Number(maxPrice),
       site,
       breakfastOnly,
+      page: 1,
       rakutenAreaCandidate,
     });
   };

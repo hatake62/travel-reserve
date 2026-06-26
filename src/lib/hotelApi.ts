@@ -7,6 +7,21 @@ import {
 
 const HOTELS_API_PATH = "/api/hotels";
 
+export type HotelSearchPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+export type HotelSearchResponse = {
+  hotels: Hotel[];
+  pagination: HotelSearchPagination;
+  warnings: string[];
+};
+
 export type FetchHotelsOptions = HotelSearchParams & {
   signal?: AbortSignal;
   onNotice?: (message: string) => void;
@@ -50,15 +65,19 @@ export async function fetchHotels({
   middleClassCode,
   smallClassCode,
   detailClassCode,
+  page,
+  limit,
   signal,
   onNotice,
-}: FetchHotelsOptions = {}): Promise<Hotel[]> {
+}: FetchHotelsOptions = {}): Promise<HotelSearchResponse> {
   if (typeof window !== "undefined") {
     const params = new URLSearchParams();
     if (keyword?.trim()) params.set("keyword", keyword.trim());
     if (checkIn) params.set("checkIn", checkIn);
     if (checkOut) params.set("checkOut", checkOut);
     if (guests !== undefined) params.set("guests", String(guests));
+    if (page && page > 1) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
     const resolvedAreaClassCode = rakutenAreaCandidate?.areaClassCode ?? areaClassCode;
     const resolvedMiddleClassCode = rakutenAreaCandidate?.middleClassCode ?? middleClassCode;
     const resolvedSmallClassCode = rakutenAreaCandidate?.smallClassCode ?? smallClassCode;
@@ -81,11 +100,13 @@ export async function fetchHotels({
     }
     const notice = response.headers.get("X-Hotel-Search-Notice");
     if (notice) onNotice?.(decodeURIComponent(notice));
-    return response.json() as Promise<Hotel[]>;
+    const data = (await response.json()) as HotelSearchResponse;
+    if (data.warnings.length > 0) onNotice?.(data.warnings.join(" / "));
+    return data;
   }
 
   const { getHotelProvider } = await import("@/lib/hotelProviders");
-  return getHotelProvider().getHotels({
+  const hotels = await getHotelProvider().getHotels({
     keyword,
     checkIn,
     checkOut,
@@ -95,8 +116,22 @@ export async function fetchHotels({
     middleClassCode,
     smallClassCode,
     detailClassCode,
+    page,
+    limit,
     onNotice,
   });
+  return {
+    hotels,
+    pagination: {
+      page: 1,
+      limit: hotels.length || 10,
+      total: hotels.length,
+      totalPages: 1,
+      hasNext: false,
+      hasPrev: false,
+    },
+    warnings: [],
+  };
 }
 
 export async function fetchHotelById(

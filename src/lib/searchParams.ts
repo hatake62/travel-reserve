@@ -9,6 +9,7 @@ export const DEFAULT_SEARCH_CONDITION: SearchCondition = {
   maxPrice: null,
   site: "",
   breakfastOnly: false,
+  page: 1,
 };
 
 const SORT_VALUES: SortBy[] = [
@@ -46,6 +47,11 @@ function parseMaxPrice(value: string | null): number | null {
   return Number.isFinite(maxPrice) && maxPrice >= 0 ? maxPrice : null;
 }
 
+function parsePage(value: string | null): number {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 1 ? page : 1;
+}
+
 export function searchConditionToParams(
   condition: SearchCondition,
 ): URLSearchParams {
@@ -65,6 +71,15 @@ export function searchConditionToParams(
   }
   if (condition.site) params.set("site", condition.site);
   if (condition.breakfastOnly) params.set("breakfastOnly", "true");
+  if (condition.page > 1) params.set("page", String(condition.page));
+
+  const area = condition.rakutenAreaCandidate;
+  if (area) {
+    params.set("areaClassCode", area.areaClassCode);
+    params.set("middleClassCode", area.middleClassCode);
+    if (area.smallClassCode) params.set("smallClassCode", area.smallClassCode);
+    if (area.detailClassCode) params.set("detailClassCode", area.detailClassCode);
+  }
 
   return params;
 }
@@ -74,9 +89,27 @@ export function searchParamsToCondition(
 ): SearchCondition {
   const sortBy = params.get("sortBy") ?? "";
   const site = params.get("site") ?? "";
+  const areaClassCode = params.get("areaClassCode") ?? "";
+  const middleClassCode = params.get("middleClassCode") ?? "";
+  const destination = params.get("destination") ?? "";
+  const rakutenAreaCandidate = areaClassCode && middleClassCode
+    ? {
+        areaClassCode,
+        areaClassName: "",
+        largeClassCode: areaClassCode,
+        largeClassName: "",
+        middleClassCode,
+        middleClassName: destination,
+        smallClassCode: params.get("smallClassCode") ?? "",
+        smallClassName: "",
+        detailClassCode: params.get("detailClassCode") ?? "",
+        detailClassName: "",
+        displayName: destination,
+      }
+    : undefined;
 
   return {
-    destination: params.get("destination") ?? "",
+    destination,
     checkIn: params.get("checkIn") ?? "",
     checkOut: params.get("checkOut") ?? "",
     guests: parseGuests(params.get("guests")),
@@ -84,5 +117,7 @@ export function searchParamsToCondition(
     maxPrice: parseMaxPrice(params.get("maxPrice")),
     site: isBookingSite(site) ? site : DEFAULT_SEARCH_CONDITION.site,
     breakfastOnly: params.get("breakfastOnly") === "true",
+    page: parsePage(params.get("page")),
+    rakutenAreaCandidate,
   };
 }

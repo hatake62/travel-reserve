@@ -4,8 +4,9 @@ import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
 import HotelCard from "@/components/HotelCard";
 import LoadingState from "@/components/LoadingState";
+import Pagination from "@/components/Pagination";
 import SearchForm from "@/components/SearchForm";
-import { fetchHotels, HotelApiError } from "@/lib/hotelApi";
+import { fetchHotels, HotelApiError, type HotelSearchPagination } from "@/lib/hotelApi";
 import { getLowestValidPrice } from "@/lib/price";
 import {
   DEFAULT_SEARCH_CONDITION,
@@ -48,6 +49,7 @@ function HomeContent() {
     [serializedSearchParams],
   );
   const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [pagination, setPagination] = useState<HotelSearchPagination | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<PageError | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
@@ -70,12 +72,17 @@ function HomeContent() {
         checkIn: condition.checkIn,
         checkOut: condition.checkOut,
         guests: condition.guests,
+        page: condition.page,
         rakutenAreaCandidate: condition.rakutenAreaCandidate,
         onNotice: (message) => {
           if (requestId === requestIdRef.current) setNoticeMessage(message);
         },
       });
-      if (requestId === requestIdRef.current) setHotels(data);
+      if (requestId === requestIdRef.current) {
+        setHotels(data.hotels);
+        setPagination(data.pagination);
+        if (data.warnings.length > 0) setNoticeMessage(data.warnings.join(" / "));
+      }
     } catch (error) {
       if (requestId === requestIdRef.current) {
         setError({
@@ -86,6 +93,7 @@ function HomeContent() {
           hint: error instanceof HotelApiError ? error.hint : undefined,
         });
         setHotels([]);
+        setPagination(null);
       }
     } finally {
       if (requestId === requestIdRef.current) setIsLoading(false);
@@ -105,15 +113,16 @@ function HomeContent() {
   }, [loadHotels, serializedSearchParams, urlCondition]);
 
   const handleSearch = (condition: SearchCondition) => {
-    const params = searchConditionToParams(condition);
+    const nextCondition = { ...condition, page: 1 };
+    const params = searchConditionToParams(nextCondition);
     const nextQuery = params.toString();
 
     if (nextQuery === serializedSearchParams) {
-      void loadHotels(condition);
+      void loadHotels(nextCondition);
       return;
     }
 
-    pendingSearchRef.current = condition;
+    pendingSearchRef.current = nextCondition;
     router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
@@ -127,6 +136,14 @@ function HomeContent() {
 
   const handleRetry = () => {
     void loadHotels(searchCondition);
+  };
+
+  const handlePageChange = (page: number) => {
+    const nextCondition = { ...searchCondition, page: Math.max(1, page) };
+    const params = searchConditionToParams(nextCondition);
+    pendingSearchRef.current = nextCondition;
+    router.push(params.size > 0 ? `${pathname}?${params.toString()}` : pathname);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // 地区コード検索はサーバー側で絞り込み済み。displayName（階層表記）を
@@ -235,7 +252,7 @@ function HomeContent() {
             >
               {isLoading || error
                 ? "検索結果を確認中"
-                : `${hotels.length}件中 ${filteredHotels.length}件を表示中`}
+                : `${pagination?.total ?? hotels.length}件中 ${filteredHotels.length}件を表示中`}
             </p>
           </div>
 
@@ -255,6 +272,13 @@ function HomeContent() {
             </div>
           ) : (
             <EmptyState actionLabel="条件をリセット" onAction={handleReset} />
+          )}
+          {pagination && !error && (
+            <Pagination
+              isLoading={isLoading}
+              onPageChange={handlePageChange}
+              pagination={pagination}
+            />
           )}
         </section>
         <footer className="mt-12 border-t border-slate-200 pt-6">
