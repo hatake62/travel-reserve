@@ -10,6 +10,12 @@ export type PriceSnapshot = {
   price: number | null;
   bookingUrl?: string;
   capturedAt: string;
+  sourcePriceField?: string;
+  matchedPlanCount?: number;
+  planName?: string;
+  roomName?: string;
+  status?: "available" | "not_found";
+  warnings?: string[];
 };
 
 export type PriceHistoryPoint = {

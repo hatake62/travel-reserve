@@ -116,6 +116,9 @@ export function mapRakutenKeywordHotelToHotel(
         site: "楽天トラベル",
         price: Math.max(0, toFiniteNumber(basicInfo.hotelMinCharge)),
         bookingUrl,
+        priceLabel: "参考最安値",
+        sourcePriceField: "hotelBasicInfo.hotelMinCharge",
+        isDateSpecific: false,
         roomType: "プラン詳細は予約サイトで確認",
         hasBreakfast: false,
         cancellation: "予約サイトで確認",
@@ -140,10 +143,7 @@ export function mapRakutenVacantHotelToHotel(
           price: Math.max(
             0,
             toFiniteNumber(
-              roomInfo.dailyCharge?.total ??
-                roomInfo.dailyCharge?.rakutenCharge ??
-              roomBasicInfo.dailyCharge?.total ??
-                roomBasicInfo.dailyCharge?.rakutenCharge,
+              roomInfo.dailyCharge?.total ?? roomBasicInfo.dailyCharge?.total,
             ),
           ),
           bookingUrl:
@@ -155,6 +155,11 @@ export function mapRakutenVacantHotelToHotel(
             roomBasicInfo.planName ||
             roomBasicInfo.roomName ||
             "プラン詳細は予約サイトで確認",
+          priceLabel: "指定日の最安値",
+          sourcePriceField: "dailyCharge.total",
+          isDateSpecific: true,
+          planName: roomBasicInfo.planName ?? undefined,
+          roomName: roomBasicInfo.roomName ?? undefined,
           hasBreakfast: String(roomBasicInfo.withBreakfastFlag) === "1",
           cancellation: "予約サイトで確認",
         },
@@ -571,8 +576,12 @@ export async function getRakutenVacantHotelsWithDebug(
   params.set("checkinDate", checkIn);
   params.set("checkoutDate", checkOut);
   params.set("adultNum", String(guests));
+  params.set("roomNum", "1");
   params.set("hits", "10");
   params.set("page", "1");
+  params.set("searchPattern", "1");
+  params.set("sort", "+roomCharge");
+  params.set("responseType", "large");
 
   if (options.hotelNo) params.set("hotelNo", String(options.hotelNo));
   const largeClassCode =

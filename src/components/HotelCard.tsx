@@ -16,6 +16,10 @@ type HotelCardProps = {
 export default function HotelCard({ hotel }: HotelCardProps) {
   const sortedOffers = sortOffersByPrice(hotel.offers);
   const lowestOffer = getLowestValidOffer(sortedOffers);
+  const primaryOffer = lowestOffer ?? sortedOffers[0];
+  const priceLabel =
+    primaryOffer?.priceLabel ??
+    (primaryOffer?.isDateSpecific ? "指定日の最安値" : "参考最安値");
 
   return (
     <article className="flex h-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
@@ -39,7 +43,7 @@ export default function HotelCard({ hotel }: HotelCardProps) {
           </div>
 
           <div className="mb-5 rounded-xl bg-sky-50 p-4 ring-1 ring-inset ring-sky-100">
-            <p className="text-xs font-bold text-sky-700">このホテルの最安値</p>
+            <p className="text-xs font-bold text-sky-700">{priceLabel}</p>
             <p className="mt-1">
               <span className="text-3xl font-bold tracking-tight text-slate-950">
                 {lowestOffer ? formatPrice(lowestOffer.price) : "予約サイトで確認"}
@@ -50,7 +54,9 @@ export default function HotelCard({ hotel }: HotelCardProps) {
             </p>
             {!lowestOffer && (
               <p className="mt-1 text-xs font-medium text-slate-500">
-                価格は予約サイトで確認してください。
+                {primaryOffer?.isDateSpecific
+                  ? "指定条件の料金は取得できませんでした。"
+                  : "価格は予約サイトで確認してください。"}
               </p>
             )}
           </div>
@@ -75,6 +81,11 @@ export default function HotelCard({ hotel }: HotelCardProps) {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-bold text-slate-900">{offer.site}</p>
+                          {offer.priceLabel && (
+                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
+                              {offer.priceLabel}
+                            </span>
+                          )}
                           {lowestOffer === offer && isValidPrice(offer.price) && (
                             <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">
                               最安値

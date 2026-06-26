@@ -1,8 +1,141 @@
 import { fetchHotels } from "@/lib/hotelApi";
 import { getHotelProvider } from "@/lib/hotelProviders";
+import { fetchRakutenDateSpecificLowestPrice } from "@/lib/hotelProviders/rakutenDateSpecificPriceProvider";
 import { NextResponse } from "next/server";
 import { validateHotelSearch } from "@/lib/searchValidation";
 import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
+import type { Hotel } from "@/types/hotel";
+
+const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = 10;
+
+type DateSpecificPriceDebug = {
+  checkInDate?: string;
+  checkOutDate?: string;
+  adults?: number;
+  dateSpecificPriceEnabled: boolean;
+  dateSpecificPriceHotelLimit: number;
+  hotelCount: number;
+  pricedHotelCount: number;
+  notFoundCount: number;
+  priceSourceField: "dailyCharge.total";
+  priceSamples: Array<{
+    hotelId: string | number;
+    price: number | null;
+    sourcePriceField: "dailyCharge.total";
+    matchedPlanCount: number;
+  }>;
+};
+
+function getRakutenHotelId(hotel: Hotel): string | null {
+  if (String(hotel.id).startsWith("rakuten-")) return String(hotel.id);
+  const providerId = hotel.providerIds?.rakuten;
+  return providerId ? `rakuten-${providerId}` : null;
+}
+
+async function applyDateSpecificPrices(
+  hotels: Hotel[],
+  {
+    checkIn,
+    checkOut,
+    guests,
+  }: {
+    checkIn: string;
+    checkOut: string;
+    guests: number;
+  },
+): Promise<{ hotels: Hotel[]; debug: DateSpecificPriceDebug }> {
+  const targetIndexes = hotels
+    .map((hotel, index) => ({ hotel, index, hotelId: getRakutenHotelId(hotel) }))
+    .filter((item): item is { hotel: Hotel; index: number; hotelId: string } =>
+      Boolean(item.hotelId),
+    )
+    .slice(0, DATE_SPECIFIC_PRICE_HOTEL_LIMIT);
+
+  const results = await Promise.all(
+    targetIndexes.map(async (target) => {
+      try {
+        const price = await fetchRakutenDateSpecificLowestPrice({
+          hotelId: target.hotelId,
+          checkInDate: checkIn,
+          checkOutDate: checkOut,
+          adults: guests,
+        });
+        return { ...target, price };
+      } catch {
+        return { ...target, price: null };
+      }
+    }),
+  );
+
+  const byIndex = new Map(results.map((result) => [result.index, result]));
+  const enrichedHotels = hotels.map((hotel, index) => {
+    const result = byIndex.get(index);
+    if (!result) return hotel;
+
+    const firstOffer = hotel.offers[0];
+    const price = result.price?.price ?? null;
+    const status = result.price?.status ?? "not_found";
+    return {
+      ...hotel,
+      offers: [
+        {
+          site: "楽天トラベル",
+          price,
+          bookingUrl:
+            result.price?.bookingUrl ||
+            result.price?.planListUrl ||
+            result.price?.hotelInformationUrl ||
+            firstOffer?.bookingUrl ||
+            "",
+          priceLabel:
+            status === "available" ? "指定日の最安値" : "指定条件の空室なし",
+          sourcePriceField: "dailyCharge.total",
+          isDateSpecific: true,
+          checkInDate: checkIn,
+          checkOutDate: checkOut,
+          adults: guests,
+          planName: result.price?.planName,
+          roomName: result.price?.roomName,
+          matchedPlanCount: result.price?.matchedPlanCount ?? 0,
+          roomType:
+            result.price?.planName ||
+            result.price?.roomName ||
+            firstOffer?.roomType ||
+            "プラン詳細は予約サイトで確認",
+          hasBreakfast: firstOffer?.hasBreakfast ?? false,
+          cancellation: firstOffer?.cancellation ?? "予約サイトで確認",
+        },
+        ...hotel.offers.slice(1),
+      ],
+    };
+  });
+
+  const pricedHotelCount = results.filter((result) => result.price?.price).length;
+  const notFoundCount = results.filter(
+    (result) => result.price?.status === "not_found" || result.price === null,
+  ).length;
+
+  return {
+    hotels: enrichedHotels,
+    debug: {
+      checkInDate: checkIn,
+      checkOutDate: checkOut,
+      adults: guests,
+      dateSpecificPriceEnabled: true,
+      dateSpecificPriceHotelLimit: DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
+      hotelCount: hotels.length,
+      pricedHotelCount,
+      notFoundCount,
+      priceSourceField: "dailyCharge.total",
+      priceSamples: results.slice(0, 5).map((result) => ({
+        hotelId: result.hotel.id,
+        price: result.price?.price ?? null,
+        sourcePriceField: "dailyCharge.total",
+        matchedPlanCount: result.price?.matchedPlanCount ?? 0,
+      })),
+    },
+  };
+}
 
 export async function GET(request: Request) {
   try {
@@ -47,10 +180,35 @@ export async function GET(request: Request) {
     const result = debug
       ? await getHotelProvider().getHotelsWithDebug?.(searchOptions)
       : undefined;
+    const hotels = result ? result.hotels : await fetchHotels(searchOptions);
+    const dateSpecific =
+      hasCompleteStayCondition && checkIn && checkOut && guests
+        ? await applyDateSpecificPrices(hotels, { checkIn, checkOut, guests })
+        : null;
+    const responseHotels = dateSpecific?.hotels ?? hotels;
+    const dateSpecificDebug = dateSpecific?.debug ?? {
+      checkInDate: checkIn,
+      checkOutDate: checkOut,
+      adults: guests,
+      dateSpecificPriceEnabled: false,
+      dateSpecificPriceHotelLimit: DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
+      hotelCount: hotels.length,
+      pricedHotelCount: 0,
+      notFoundCount: 0,
+      priceSourceField: "dailyCharge.total" as const,
+      priceSamples: [],
+    };
     const response = NextResponse.json(
       debug && result
-        ? { hotels: result.hotels, debug: result.debug }
-        : await fetchHotels(searchOptions),
+        ? {
+            hotels: responseHotels,
+            debug: {
+              ...result.debug,
+              ...dateSpecificDebug,
+              dateSpecificPrice: dateSpecificDebug,
+            },
+          }
+        : responseHotels,
     );
     const hasAreaCode = Boolean(
       areaClassCode || middleClassCode || smallClassCode || detailClassCode,

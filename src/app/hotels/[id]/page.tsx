@@ -130,6 +130,10 @@ export default function HotelDetailPage({
 
   const sortedOffers = sortOffersByPrice(hotel.offers);
   const lowestOffer = getLowestValidOffer(sortedOffers);
+  const primaryOffer = lowestOffer ?? sortedOffers[0];
+  const priceLabel =
+    primaryOffer?.priceLabel ??
+    (primaryOffer?.isDateSpecific ? "指定日の最安値" : "参考最安値");
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 text-slate-900 sm:px-6 sm:py-12">
@@ -173,7 +177,7 @@ export default function HotelDetailPage({
                 className="text-sm font-bold text-sky-700"
                 id="lowest-price-heading"
               >
-                このホテルの最安値
+                {priceLabel}
               </h2>
               {lowestOffer ? (
                 <p className="mt-1">
@@ -188,7 +192,9 @@ export default function HotelDetailPage({
                     価格は予約サイトで確認
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    現在、有効な価格情報は取得できていません。
+                    {primaryOffer?.isDateSpecific
+                      ? "指定条件の料金は取得できませんでした。"
+                      : "現在、有効な価格情報は取得できていません。"}
                   </p>
                 </div>
               )}
@@ -231,6 +237,11 @@ export default function HotelDetailPage({
                           <th className="px-5 py-5 font-bold text-slate-900" scope="row">
                             <div className="flex items-center gap-2">
                               {offer.site}
+                              {offer.priceLabel && (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
+                                  {offer.priceLabel}
+                                </span>
+                              )}
                               {lowestOffer === offer && isValidPrice(offer.price) && (
                                 <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">最安値</span>
                               )}

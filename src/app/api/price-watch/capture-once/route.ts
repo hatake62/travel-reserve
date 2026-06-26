@@ -92,8 +92,13 @@ export async function POST(request: Request) {
         price: snapshot.price,
         bookingUrl: snapshot.bookingUrl ?? "",
         capturedAt: snapshot.capturedAt,
+        sourcePriceField: snapshot.sourcePriceField,
+        matchedPlanCount: snapshot.matchedPlanCount ?? 0,
+        planName: snapshot.planName,
+        roomName: snapshot.roomName,
+        status: snapshot.status,
       },
-      warnings: result.warnings,
+      warnings: [...(snapshot.warnings ?? []), ...result.warnings],
     });
   } catch (error) {
     const message =

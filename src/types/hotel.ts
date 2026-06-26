@@ -5,6 +5,14 @@ export type HotelOffer = {
   planListUrl?: string;
   reserveUrl?: string;
   isDateSpecific?: boolean;
+  priceLabel?: string;
+  sourcePriceField?: string;
+  checkInDate?: string;
+  checkOutDate?: string;
+  adults?: number;
+  planName?: string;
+  roomName?: string;
+  matchedPlanCount?: number;
   roomType: string;
   hasBreakfast: boolean;
   cancellation: string;

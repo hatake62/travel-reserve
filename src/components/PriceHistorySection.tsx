@@ -12,6 +12,15 @@ type PriceHistorySectionProps = {
   hotelId: string | number;
 };
 
+type CaptureSnapshotSummary = {
+  price: number | null;
+  sourcePriceField?: string;
+  matchedPlanCount?: number;
+  planName?: string;
+  roomName?: string;
+  status?: "available" | "not_found";
+};
+
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -25,6 +34,19 @@ function getDefaultDates(): { checkInDate: string; checkOutDate: string } {
     checkInDate: toDateInputValue(checkIn),
     checkOutDate: toDateInputValue(checkOut),
   };
+}
+
+function getStayNights(checkInDate: string, checkOutDate: string): number {
+  const checkIn = new Date(`${checkInDate}T00:00:00.000Z`).getTime();
+  const checkOut = new Date(`${checkOutDate}T00:00:00.000Z`).getTime();
+  const nights = Math.round((checkOut - checkIn) / 86400000);
+  return Number.isFinite(nights) && nights >= 1 ? nights : 1;
+}
+
+function formatSavedPrice(price: number | null): string {
+  return typeof price === "number" && Number.isFinite(price) && price > 0
+    ? `${price.toLocaleString("ja-JP")}円`
+    : "価格未取得";
 }
 
 export default function PriceHistorySection({
@@ -141,16 +163,26 @@ export default function PriceHistorySection({
       });
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;
-        snapshot?: { price: number | null };
+        snapshot?: CaptureSnapshotSummary;
       };
 
       if (!response.ok) {
         throw new Error(data.error ?? "現在価格の保存に失敗しました");
       }
+      const snapshot = data.snapshot;
+      const planText =
+        snapshot?.planName || snapshot?.roomName
+          ? ` / ${snapshot.planName || snapshot.roomName}`
+          : "";
       setNotice(
-        data.snapshot?.price
-          ? "現在価格を実データとして保存しました。"
-          : "現在価格を保存しました。価格は取得できなかったため、価格未取得として記録しています。",
+        `${checkInDate}から${getStayNights(
+          checkInDate,
+          checkOutDate,
+        )}泊、大人${adults}名の指定日最安値として${formatSavedPrice(
+          snapshot?.price ?? null,
+        )}を保存しました。取得元: ${
+          snapshot?.sourcePriceField ?? "dailyCharge.total"
+        } / 取得プラン数: ${snapshot?.matchedPlanCount ?? 0}件${planText}`,
       );
       await loadPriceHistory(false);
     } catch (error) {

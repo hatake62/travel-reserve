@@ -586,6 +586,30 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 /api/hotels/rakuten-78182/booking-url?checkIn=2026-08-10&checkOut=2026-08-11&adults=2
 ```
 
+## 楽天トラベル価格表示の扱い
+
+楽天トラベルAPIでは、宿泊日未指定の参考価格と、宿泊日・人数を指定した空室検索の価格を分けて扱います。
+
+仕様:
+
+- 宿泊日未指定のホテル検索では、楽天キーワード検索APIや施設情報に含まれる `hotelBasicInfo.hotelMinCharge` を参考最安値として表示します。
+- `hotelMinCharge` は指定宿泊日の実料金ではないため、宿泊日指定時の最安値表示や料金追跡には使いません。
+- 宿泊日、チェックアウト日、人数が指定されている場合は、楽天トラベル空室検索APIへ `hotelNo`、`checkinDate`、`checkoutDate`、`adultNum`、`roomNum=1`、`searchPattern=1`、`sort=+roomCharge`、`responseType=large`、`hits=30` を指定します。
+- 指定宿泊日の価格は、空室検索APIレスポンス内の `dailyCharge.total` の最小値を使います。
+- `dailyCharge.rakutenCharge` は `chargeFlag` によって1人あたり料金か1室あたり料金かが変わるため、基準価格にはしません。
+- 料金追跡グラフへ保存する価格も、同じ `dailyCharge.total` の最小値です。宿泊日未指定の参考価格は保存しません。
+- `Data Not Found` や指定条件に合う `dailyCharge.total` がない場合は、`price=null` として保存・表示します。
+- 同じホテル、宿泊日、チェックアウト日、人数、取得日のスナップショットはupsertし、同日に再取得すると最新の指定日価格で上書きします。
+- 実際の料金、空室、キャンセル条件、予約条件は楽天トラベル側で確認してください。
+
+指定日価格のデバッグ:
+
+```text
+/api/hotels?keyword=東京&checkIn=2026-07-25&checkOut=2026-07-26&guests=2&debug=true
+```
+
+`debug=true` では、`dateSpecificPriceEnabled`、`dateSpecificPriceHotelLimit`、`pricedHotelCount`、`notFoundCount`、`priceSourceField`、最大5件の `priceSamples` を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
+
 ## 楽天地区候補検索
 
 ホテル検索フォームの地区候補は、楽天トラベル地区コードAPI `GetAreaClass` から取得します。
