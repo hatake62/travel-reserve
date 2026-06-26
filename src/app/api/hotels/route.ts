@@ -190,7 +190,10 @@ export async function GET(request: Request) {
     const areaClassCode = params.get("areaClassCode") ?? undefined;
     const middleClassCode = params.get("middleClassCode") ?? undefined;
     const smallClassCode = params.get("smallClassCode") ?? undefined;
-    const detailClassCode = params.get("detailClassCode") ?? undefined;
+    const requestedDetailClassCode = params.get("detailClassCode") ?? undefined;
+    // GetAreaClassの詳細コードはVacantHotelSearch側で無効になることがある。
+    // 一覧は小分類・中分類までで十分広く検索し、詳細コードは送らない。
+    const detailClassCode = undefined;
     const page = parsePositiveInteger(params.get("page"), 1);
     const limit = parsePositiveInteger(params.get("limit"), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const debug = params.get("debug") === "true";
@@ -209,7 +212,9 @@ export async function GET(request: Request) {
       }
     }
 
-    const providerNotices: string[] = [];
+    const providerNotices: string[] = requestedDetailClassCode
+      ? ["詳細地区コードは楽天API互換性のため使用せず、広い地区条件で検索しています。"]
+      : [];
     const searchOptions = {
       keyword,
       checkIn,
@@ -279,6 +284,7 @@ export async function GET(request: Request) {
               hasNext: resolvedPage < totalPages,
               hasPrev: resolvedPage > 1,
               areaSearchLevelUsed: smallClassCode ? "smallClassCode" : middleClassCode ? "middleClassCode" : "keyword",
+              ignoredDetailClassCode: Boolean(requestedDetailClassCode),
               fallbackSteps: fallbackWarnings,
               rawHotelCount: result.debug.rawCount,
               mergedHotelCount: hotels.length,
@@ -305,7 +311,7 @@ export async function GET(request: Request) {
     };
     const response = NextResponse.json(responseBody);
     const hasAreaCode = Boolean(
-      areaClassCode || middleClassCode || smallClassCode || detailClassCode,
+      areaClassCode || middleClassCode || smallClassCode,
     );
     if (providerNotices.length > 0) {
       response.headers.set(
