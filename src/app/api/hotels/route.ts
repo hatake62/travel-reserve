@@ -18,12 +18,20 @@ type DateSpecificPriceDebug = {
   hotelCount: number;
   pricedHotelCount: number;
   notFoundCount: number;
-  priceSourceField: "dailyCharge.total";
+  priceSourceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
+  fallbackCount: number;
+  priceSourceFieldCounts: Record<string, number>;
+  priceExtractionWarnings: string[];
   priceSamples: Array<{
     hotelId: string | number;
+    status: "available" | "not_found";
     price: number | null;
-    sourcePriceField: "dailyCharge.total";
+    sourcePriceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
     matchedPlanCount: number;
+    rawPlanCount: number;
+    extractedPriceCount: number;
+    searchPatternsTried: string[];
+    pagesFetched: number;
   }>;
 };
 
@@ -94,9 +102,12 @@ async function applyDateSpecificPrices(
             result.price?.hotelInformationUrl ||
             firstOffer?.bookingUrl ||
             "",
-          priceLabel:
-            status === "available" ? "指定日の最安値" : "指定条件の空室なし",
-          sourcePriceField: "dailyCharge.total",
+          priceLabel: status === "available"
+            ? result.price?.sourcePriceField === "dailyCharge.rakutenCharge"
+              ? "指定日の参考価格"
+              : "指定日の最安値"
+            : "指定条件の料金未取得",
+          sourcePriceField: result.price?.sourcePriceField ?? "dailyCharge.total",
           isDateSpecific: true,
           checkInDate: checkIn,
           checkOutDate: checkOut,
@@ -121,6 +132,20 @@ async function applyDateSpecificPrices(
   const notFoundCount = results.filter(
     (result) => result.price?.status === "not_found" || result.price === null,
   ).length;
+  const fallbackCount = results.filter(
+    (result) => result.price?.sourcePriceField === "dailyCharge.rakutenCharge",
+  ).length;
+  const priceSourceFieldCounts = results.reduce<Record<string, number>>(
+    (counts, result) => {
+      const field = result.price?.sourcePriceField;
+      if (field) counts[field] = (counts[field] ?? 0) + 1;
+      return counts;
+    },
+    {},
+  );
+  const priceExtractionWarnings = results.flatMap(
+    (result) => result.price?.warnings ?? [],
+  );
 
   return {
     hotels: enrichedHotels,
@@ -133,12 +158,22 @@ async function applyDateSpecificPrices(
       hotelCount: hotels.length,
       pricedHotelCount,
       notFoundCount,
-      priceSourceField: "dailyCharge.total",
+      priceSourceField: fallbackCount > 0 && pricedHotelCount === fallbackCount
+        ? "dailyCharge.rakutenCharge"
+        : "dailyCharge.total",
+      fallbackCount,
+      priceSourceFieldCounts,
+      priceExtractionWarnings,
       priceSamples: results.slice(0, 5).map((result) => ({
         hotelId: result.hotel.id,
+        status: result.price?.status ?? "not_found",
         price: result.price?.price ?? null,
-        sourcePriceField: "dailyCharge.total",
+        sourcePriceField: result.price?.sourcePriceField ?? "dailyCharge.total",
         matchedPlanCount: result.price?.matchedPlanCount ?? 0,
+        rawPlanCount: result.price?.rawPlanCount ?? 0,
+        extractedPriceCount: result.price?.extractedPriceCount ?? 0,
+        searchPatternsTried: result.price?.searchPatternsTried ?? [],
+        pagesFetched: result.price?.pagesFetched ?? 0,
       })),
     },
   };
@@ -209,6 +244,9 @@ export async function GET(request: Request) {
       pricedHotelCount: 0,
       notFoundCount: 0,
       priceSourceField: "dailyCharge.total" as const,
+      fallbackCount: 0,
+      priceSourceFieldCounts: {},
+      priceExtractionWarnings: [],
       priceSamples: [],
     };
     const fallbackWarnings = result.debug.warnings.filter((warning) =>
@@ -251,6 +289,9 @@ export async function GET(request: Request) {
               ),
               dateSpecificPriceAvailableCount: dateSpecificDebug.pricedHotelCount,
               dateSpecificPriceNotFoundCount: dateSpecificDebug.notFoundCount,
+              dateSpecificPriceFallbackCount: dateSpecificDebug.fallbackCount,
+              priceSourceFieldCounts: dateSpecificDebug.priceSourceFieldCounts,
+              priceExtractionWarnings: dateSpecificDebug.priceExtractionWarnings,
               dateSpecificPriceNotCheckedCount: Math.max(
                 0,
                 pageHotels.filter((hotel) => Boolean(getRakutenHotelId(hotel))).length -

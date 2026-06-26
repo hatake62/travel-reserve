@@ -26,8 +26,13 @@ export type RakutenDateSpecificLowestPrice = {
   hotelInformationUrl: string;
   planName?: string;
   roomName?: string;
-  sourcePriceField: "dailyCharge.total";
+  sourcePriceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
   matchedPlanCount: number;
+  rawPlanCount: number;
+  extractedPriceCount: number;
+  searchPatternsTried: string[];
+  pagesFetched: number;
+  chargeFlags: string[];
   status: RakutenDateSpecificPriceStatus;
   warnings: string[];
 };
@@ -40,9 +45,11 @@ type RakutenResponse = {
 
 type PlanPriceCandidate = {
   price: number;
+  sourcePriceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
   reserveUrl: string;
   planName?: string;
   roomName?: string;
+  chargeFlag?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -58,7 +65,7 @@ function parseResponse(body: string): RakutenResponse | null {
 }
 
 function toPositiveNumber(value: unknown): number | null {
-  const number = typeof value === "string" ? Number(value) : value;
+  const number = typeof value === "string" ? Number(value.replace(/,/g, "")) : value;
   return typeof number === "number" && Number.isFinite(number) && number > 0
     ? number
     : null;
@@ -91,32 +98,70 @@ function findHotelBasicInfo(value: unknown): Record<string, unknown> | null {
   );
 }
 
-function getDailyChargeTotals(record: Record<string, unknown>): number[] {
-  const dailyCharges = Array.isArray(record.dailyCharge)
-    ? record.dailyCharge.filter(isRecord)
-    : isRecord(record.dailyCharge)
-    ? [record.dailyCharge]
-    : [];
-  return dailyCharges
-    .map((dailyCharge) => toPositiveNumber(dailyCharge.total))
-    .filter((price): price is number => price !== null);
+function dailyChargeRecords(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) return value.filter(isRecord);
+  return isRecord(value) ? [value] : [];
 }
 
-function collectPlanPrices(value: unknown): PlanPriceCandidate[] {
-  const candidates = findRecords(value).flatMap((record) =>
-    getDailyChargeTotals(record).map((price) => ({
-      price,
-      reserveUrl: getString(record.reserveUrl),
-      planName: getString(record.planName) || undefined,
-      roomName: getString(record.roomName) || undefined,
-    })),
-  );
+function collectPlanPrices(value: unknown): {
+  prices: PlanPriceCandidate[];
+  rawPlanCount: number;
+} {
+  const candidates: PlanPriceCandidate[] = [];
+  let rawPlanCount = 0;
+  const visit = (
+    current: unknown,
+    context: Omit<PlanPriceCandidate, "price" | "sourcePriceField"> = {
+      reserveUrl: "",
+    },
+  ) => {
+    if (Array.isArray(current)) {
+      current.forEach((item) => visit(item, context));
+      return;
+    }
+    if (!isRecord(current)) return;
+
+    const nextContext = {
+      reserveUrl: getString(current.reserveUrl) || context.reserveUrl,
+      planName: getString(current.planName) || context.planName,
+      roomName: getString(current.roomName) || context.roomName,
+      chargeFlag: getString(current.chargeFlag) || context.chargeFlag,
+    };
+    if (nextContext.reserveUrl || nextContext.planName || nextContext.roomName) {
+      rawPlanCount += 1;
+    }
+    for (const dailyCharge of dailyChargeRecords(current.dailyCharge)) {
+      const chargeFlag = getString(dailyCharge.chargeFlag) || nextContext.chargeFlag;
+      const total = toPositiveNumber(dailyCharge.total);
+      const rakutenCharge = toPositiveNumber(dailyCharge.rakutenCharge);
+      if (total !== null) {
+        candidates.push({
+          price: total,
+          sourcePriceField: "dailyCharge.total",
+          ...nextContext,
+          chargeFlag,
+        });
+      } else if (rakutenCharge !== null) {
+        candidates.push({
+          price: rakutenCharge,
+          sourcePriceField: "dailyCharge.rakutenCharge",
+          ...nextContext,
+          chargeFlag,
+        });
+      }
+    }
+    Object.values(current).forEach((child) => {
+      if (Array.isArray(child) || isRecord(child)) visit(child, nextContext);
+    });
+  };
+  visit(value);
   const seen = new Set<string>();
-  return candidates
+  const prices = candidates
     .filter((candidate) => {
       const key = [
         candidate.price,
         candidate.reserveUrl,
+        candidate.sourcePriceField,
         candidate.planName ?? "",
         candidate.roomName ?? "",
       ].join("|");
@@ -125,6 +170,7 @@ function collectPlanPrices(value: unknown): PlanPriceCandidate[] {
       return true;
     })
     .sort((a, b) => a.price - b.price);
+  return { prices, rawPlanCount };
 }
 
 function applyStayParams(
@@ -255,6 +301,11 @@ function createNotFoundResult({
     hotelInformationUrl,
     sourcePriceField: "dailyCharge.total",
     matchedPlanCount: 0,
+    rawPlanCount: 0,
+    extractedPriceCount: 0,
+    searchPatternsTried: [],
+    pagesFetched: 0,
+    chargeFlags: [],
     status: "not_found",
     warnings,
   };
@@ -276,62 +327,94 @@ export async function fetchRakutenDateSpecificLowestPrice({
     throw new Error("楽天施設番号を取得できませんでした。");
   }
 
-  const params = createRakutenParams(getRakutenCredentials());
-  params.set("hotelNo", hotelNo);
-  params.set("checkinDate", checkInDate);
-  params.set("checkoutDate", checkOutDate);
-  params.set("adultNum", String(adults));
-  params.set("roomNum", "1");
-  params.set("searchPattern", "1");
-  params.set("sort", "+roomCharge");
-  params.set("responseType", "large");
-  params.set("hits", "30");
-  params.set("page", "1");
+  const searchPatternsTried: string[] = [];
+  const warnings: string[] = [];
+  const allPrices: PlanPriceCandidate[] = [];
+  let pagesFetched = 0;
+  let rawPlanCount = 0;
+  let planListUrl = "";
+  let hotelInformationUrl = "";
 
-  const { response, responseBody, requestUrl } = await fetchRakutenApi(
-    VACANT_HOTEL_SEARCH_ENDPOINT,
-    params,
-    { next: { revalidate: 0 } },
-  );
-  const data = parseResponse(responseBody);
+  const fetchPage = async (searchPattern: "0" | "1", page: number) => {
+    const params = createRakutenParams(getRakutenCredentials());
+    params.set("hotelNo", hotelNo);
+    params.set("checkinDate", checkInDate);
+    params.set("checkoutDate", checkOutDate);
+    params.set("adultNum", String(adults));
+    params.set("roomNum", "1");
+    params.set("searchPattern", searchPattern);
+    params.set("sort", "+roomCharge");
+    params.set("responseType", "large");
+    params.set("hits", "30");
+    params.set("page", String(page));
 
-  if (isNotFoundResponse(response, data, responseBody)) {
-    return createNotFoundResult({
-      hotelId,
-      hotelNo,
-      checkInDate,
-      checkOutDate,
-      adults,
-    });
+    const { response, responseBody, requestUrl } = await fetchRakutenApi(
+      VACANT_HOTEL_SEARCH_ENDPOINT,
+      params,
+      { next: { revalidate: 0 } },
+    );
+    pagesFetched += 1;
+    const data = parseResponse(responseBody);
+    if (isNotFoundResponse(response, data, responseBody)) return;
+    if (!data || !isRecord(data) || !response.ok || data.error) {
+      console.error("Rakuten date specific price request failed", {
+        status: response.status,
+        responseBodySnippet: getRakutenResponseBodySnippet(responseBody),
+        url: maskRakutenUrl(requestUrl),
+      });
+      const detail = data?.error_description ?? data?.error ?? `HTTP ${response.status}`;
+      throw new Error(`楽天トラベルAPIから指定日最安値を取得できませんでした: ${detail}`);
+    }
+    const basicInfo = findHotelBasicInfo(data.hotels);
+    planListUrl ||= getString(basicInfo?.planListUrl);
+    hotelInformationUrl ||= getString(basicInfo?.hotelInformationUrl);
+    const extracted = collectPlanPrices(data.hotels);
+    rawPlanCount += extracted.rawPlanCount;
+    allPrices.push(...extracted.prices);
+  };
+
+  searchPatternsTried.push("1");
+  await fetchPage("1", 1);
+  if (!allPrices.some((price) => price.sourcePriceField === "dailyCharge.total")) {
+    await fetchPage("1", 2);
+  }
+  if (!allPrices.some((price) => price.sourcePriceField === "dailyCharge.total")) {
+    searchPatternsTried.push("0");
+    await fetchPage("0", 1);
+    if (!allPrices.some((price) => price.sourcePriceField === "dailyCharge.total")) {
+      await fetchPage("0", 2);
+    }
   }
 
-  if (!data || !isRecord(data) || !response.ok || data.error) {
-    console.error("Rakuten date specific price request failed", {
-      status: response.status,
-      responseBodySnippet: getRakutenResponseBodySnippet(responseBody),
-      url: maskRakutenUrl(requestUrl),
-    });
-    const detail = data?.error_description ?? data?.error ?? `HTTP ${response.status}`;
-    throw new Error(`楽天トラベルAPIから指定日最安値を取得できませんでした: ${detail}`);
-  }
-
-  const basicInfo = findHotelBasicInfo(data.hotels);
-  const planListUrl = getString(basicInfo?.planListUrl);
-  const hotelInformationUrl = getString(basicInfo?.hotelInformationUrl);
-  const planPrices = collectPlanPrices(data.hotels);
-  const lowestPlan = planPrices[0];
+  const totalPrices = allPrices
+    .filter((price) => price.sourcePriceField === "dailyCharge.total")
+    .sort((a, b) => a.price - b.price);
+  const rakutenChargePrices = allPrices
+    .filter((price) => price.sourcePriceField === "dailyCharge.rakutenCharge")
+    .sort((a, b) => a.price - b.price);
+  const lowestPlan = totalPrices[0] ?? rakutenChargePrices[0];
 
   if (!lowestPlan) {
-    return createNotFoundResult({
-      hotelId,
-      hotelNo,
-      checkInDate,
-      checkOutDate,
-      adults,
-      planListUrl,
-      hotelInformationUrl,
-      warnings: ["指定条件のdailyCharge.totalを取得できませんでした"],
-    });
+    return {
+      ...createNotFoundResult({
+        hotelId,
+        hotelNo,
+        checkInDate,
+        checkOutDate,
+        adults,
+        planListUrl,
+        hotelInformationUrl,
+        warnings: ["指定条件の料金を空室検索APIから取得できませんでした"],
+      }),
+      rawPlanCount,
+      searchPatternsTried,
+      pagesFetched,
+    };
+  }
+  if (lowestPlan.sourcePriceField === "dailyCharge.rakutenCharge") {
+    warnings.push(
+      "dailyCharge.totalが取得できなかったため、rakutenChargeをfallbackとして使用しました",
+    );
   }
 
   const bookingUrl =
@@ -364,9 +447,23 @@ export async function fetchRakutenDateSpecificLowestPrice({
     hotelInformationUrl,
     planName: lowestPlan.planName,
     roomName: lowestPlan.roomName,
-    sourcePriceField: "dailyCharge.total",
-    matchedPlanCount: planPrices.length,
+    sourcePriceField: lowestPlan.sourcePriceField,
+    matchedPlanCount: totalPrices.length,
+    rawPlanCount,
+    extractedPriceCount:
+      lowestPlan.sourcePriceField === "dailyCharge.total"
+        ? totalPrices.length
+        : rakutenChargePrices.length,
+    searchPatternsTried,
+    pagesFetched,
+    chargeFlags: [
+      ...new Set(
+        allPrices
+          .map((price) => price.chargeFlag)
+          .filter((chargeFlag): chargeFlag is string => Boolean(chargeFlag)),
+      ),
+    ],
     status: "available",
-    warnings: [],
+    warnings,
   };
 }

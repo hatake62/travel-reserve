@@ -605,6 +605,8 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 - `hotelMinCharge` は指定宿泊日の実料金ではないため、宿泊日指定時の最安値表示や料金追跡には使いません。
 - 宿泊日、チェックアウト日、人数が指定されている場合は、楽天トラベル空室検索APIへ `hotelNo`、`checkinDate`、`checkoutDate`、`adultNum`、`roomNum=1`、`searchPattern=1`、`sort=+roomCharge`、`responseType=large`、`hits=30` を指定します。
 - 指定宿泊日の価格は、空室検索APIレスポンス内の `dailyCharge.total` の最小値を使います。
+- 指定日価格の抽出はまず `searchPattern=1` の1ページ目を確認し、`dailyCharge.total` が取れない場合だけ2ページ目、さらに `searchPattern=0` を最大2ページまで試します。
+- `dailyCharge.total` がレスポンス内に1件もなく、`dailyCharge.rakutenCharge` だけが取れる場合は、単位が `chargeFlag` によって異なる可能性があるため「指定日の参考価格」としてのみ表示します。取得元とwarningをAPIのdebug情報に含めます。
 - `dailyCharge.rakutenCharge` は `chargeFlag` によって1人あたり料金か1室あたり料金かが変わるため、基準価格にはしません。
 - 料金追跡グラフへ保存する価格も、同じ `dailyCharge.total` の最小値です。宿泊日未指定の参考価格は保存しません。
 - `Data Not Found` や指定条件に合う `dailyCharge.total` がない場合は、`price=null` として保存・表示します。

@@ -16,6 +16,10 @@ type CaptureSnapshotSummary = {
   price: number | null;
   sourcePriceField?: string;
   matchedPlanCount?: number;
+  rawPlanCount?: number;
+  extractedPriceCount?: number;
+  searchPatternsTried?: string[];
+  pagesFetched?: number;
   planName?: string;
   roomName?: string;
   status?: "available" | "not_found";
@@ -164,6 +168,7 @@ export default function PriceHistorySection({
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;
         snapshot?: CaptureSnapshotSummary;
+        warnings?: string[];
       };
 
       if (!response.ok) {
@@ -174,6 +179,10 @@ export default function PriceHistorySection({
         snapshot?.planName || snapshot?.roomName
           ? ` / ${snapshot.planName || snapshot.roomName}`
           : "";
+      const extractionText = ` / 生プラン候補: ${snapshot?.rawPlanCount ?? 0}件 / 抽出価格: ${snapshot?.extractedPriceCount ?? 0}件 / 検索パターン: ${(snapshot?.searchPatternsTried ?? []).join("→") || "1"} / 取得ページ: ${snapshot?.pagesFetched ?? 0}件`;
+      const warningText = data.warnings?.length
+        ? ` / 注意: ${data.warnings.join(" / ")}`
+        : "";
       setNotice(
         `${checkInDate}から${getStayNights(
           checkInDate,
@@ -182,7 +191,7 @@ export default function PriceHistorySection({
           snapshot?.price ?? null,
         )}を保存しました。取得元: ${
           snapshot?.sourcePriceField ?? "dailyCharge.total"
-        } / 取得プラン数: ${snapshot?.matchedPlanCount ?? 0}件${planText}`,
+        } / 取得プラン数: ${snapshot?.matchedPlanCount ?? 0}件${extractionText}${planText}${warningText}`,
       );
       await loadPriceHistory(false);
     } catch (error) {

@@ -12,6 +12,10 @@ export type PriceSnapshot = {
   capturedAt: string;
   sourcePriceField?: string;
   matchedPlanCount?: number;
+  rawPlanCount?: number;
+  extractedPriceCount?: number;
+  searchPatternsTried?: string[];
+  pagesFetched?: number;
   planName?: string;
   roomName?: string;
   status?: "available" | "not_found";
