@@ -28,10 +28,10 @@ export default function FavoriteButton({ hotelId, hotel }: FavoriteButtonProps) 
   return (
     <button
       aria-pressed={isFavorite}
-      className={`inline-flex shrink-0 items-center justify-center rounded-lg border px-3 py-2 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-amber-200 ${
+      className={`inline-flex shrink-0 items-center justify-center rounded-full border px-3 py-2 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-blue-100 ${
         isFavorite
-          ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
-          : "border-slate-300 bg-white text-slate-700 hover:border-amber-300 hover:text-amber-700"
+          ? "border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"
+          : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600"
       }`}
       onClick={() => {
         if (isFavorite) {
@@ -43,7 +43,7 @@ export default function FavoriteButton({ hotelId, hotel }: FavoriteButtonProps) 
       }}
       type="button"
     >
-      {isFavorite ? "★ お気に入り済み" : "☆ お気に入り"}
+      {isFavorite ? "お気に入り済み" : "お気に入り"}
     </button>
   );
 }

@@ -31,6 +31,7 @@ type RakutenHotelBasicInfo = {
   hotelImageUrl?: string | null;
   hotelThumbnailUrl?: string | null;
   reviewAverage?: number | string | null;
+  reviewCount?: number | string | null;
   hotelSpecial?: string | null;
   hotelDescription?: string | null;
   access?: string | null;
@@ -131,6 +132,7 @@ export function mapRakutenKeywordHotelToHotel(
     name: basicInfo.hotelName,
     area: address || entry.hotelDetailInfo?.areaName || "エリア情報なし",
     rating: toNullableFiniteNumber(basicInfo.reviewAverage),
+    reviewCount: toNullableFiniteNumber(basicInfo.reviewCount),
     hotelClass: null,
     amenities: [],
     amenityText,

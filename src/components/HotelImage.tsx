@@ -37,15 +37,15 @@ export default function HotelImage({
       ) : (
         <div
           aria-label={`${alt}（画像なし）`}
-          className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,#f8fafc_0%,#e2e8f0_55%,#cbd5e1_100%)] px-6 text-center"
+          className="flex h-full w-full items-center justify-center bg-slate-100 px-6 text-center"
           role="img"
         >
           <div className="max-w-xs">
             <div
               aria-hidden="true"
-              className="mx-auto flex size-14 items-center justify-center rounded-full bg-white/75 text-3xl shadow-sm ring-1 ring-slate-200"
+              className="mx-auto flex size-14 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-400 shadow-sm ring-1 ring-slate-200"
             >
-              🏨
+              NO IMAGE
             </div>
             <p className="mt-3 text-sm font-bold text-slate-700">画像なし</p>
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">

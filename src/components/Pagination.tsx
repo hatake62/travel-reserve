@@ -15,6 +15,16 @@ export default function Pagination({
 
   const first = (pagination.page - 1) * pagination.limit + 1;
   const last = Math.min(pagination.total, pagination.page * pagination.limit);
+  const pages = Array.from(
+    { length: Math.min(5, pagination.totalPages) },
+    (_, index) => {
+      const start = Math.min(
+        Math.max(1, pagination.page - 2),
+        Math.max(1, pagination.totalPages - 4),
+      );
+      return start + index;
+    },
+  );
 
   return (
     <nav
@@ -24,20 +34,39 @@ export default function Pagination({
       <p className="text-sm font-medium text-slate-600">
         {first}〜{last}件目を表示 / 全{pagination.total}件
       </p>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <button
-          className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+          className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
           disabled={!pagination.hasPrev || isLoading}
           onClick={() => onPageChange(pagination.page - 1)}
           type="button"
         >
           前へ
         </button>
-        <span aria-live="polite" className="min-w-24 text-center text-sm font-bold text-slate-700">
-          {pagination.page} / {pagination.totalPages} ページ
-        </span>
+        {pages[0] > 1 && (
+          <span className="px-1 text-sm font-bold text-slate-400">...</span>
+        )}
+        {pages.map((page) => (
+          <button
+            aria-current={page === pagination.page ? "page" : undefined}
+            className={`flex size-11 items-center justify-center rounded-xl border text-sm font-bold transition ${
+              page === pagination.page
+                ? "border-blue-600 bg-blue-600 text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+            disabled={isLoading}
+            key={page}
+            onClick={() => onPageChange(page)}
+            type="button"
+          >
+            {page}
+          </button>
+        ))}
+        {pages[pages.length - 1] < pagination.totalPages && (
+          <span className="px-1 text-sm font-bold text-slate-400">...</span>
+        )}
         <button
-          className="min-h-11 rounded-lg border border-sky-700 bg-sky-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+          className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
           disabled={!pagination.hasNext || isLoading}
           onClick={() => onPageChange(pagination.page + 1)}
           type="button"

@@ -1,6 +1,7 @@
 "use client";
 
 import ErrorMessage from "@/components/ErrorMessage";
+import LayoutShell from "@/components/LayoutShell";
 import LoadingState from "@/components/LoadingState";
 import type { PriceWatchTarget } from "@/types/priceHistory";
 import Link from "next/link";
@@ -83,16 +84,17 @@ export default function PriceWatchPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-8 text-slate-900 sm:px-6 sm:py-12">
-      <div className="mx-auto max-w-6xl">
+    <LayoutShell>
+      <main className="px-5 py-8 text-slate-900 sm:px-6 sm:py-10">
+        <div className="mx-auto max-w-6xl">
         <Link
-          className="mb-6 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          className="mb-6 inline-flex text-sm font-bold text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
           href="/"
         >
           ホテル一覧へ戻る
         </Link>
         <header className="mb-8">
-          <p className="text-sm font-semibold text-sky-700">Price Watch</p>
+          <p className="text-sm font-semibold text-blue-600">Price Watch</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">
             料金追跡の管理
           </h1>
@@ -151,13 +153,13 @@ export default function PriceWatchPage() {
                     <td className="px-5 py-5">
                       <div className="flex justify-end gap-2">
                         <Link
-                          className="inline-flex h-10 items-center rounded-lg border border-sky-700 px-3 text-xs font-bold text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                          className="inline-flex h-10 items-center rounded-xl border border-blue-600 px-3 text-xs font-bold text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
                           href={`/hotels/${encodeURIComponent(target.hotelId)}`}
                         >
                           料金履歴を見る
                         </Link>
                         <button
-                          className="inline-flex h-10 items-center rounded-lg bg-slate-900 px-3 text-xs font-bold text-white hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          className="inline-flex h-10 items-center rounded-xl bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-300"
                           disabled={updatingId === target.id}
                           onClick={() => {
                             void updateTarget(target, !target.enabled);
@@ -178,7 +180,8 @@ export default function PriceWatchPage() {
             追跡対象はまだ登録されていません。ホテル詳細ページから宿泊条件を追加できます。
           </p>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </LayoutShell>
   );
 }

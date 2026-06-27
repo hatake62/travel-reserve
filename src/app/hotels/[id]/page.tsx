@@ -3,6 +3,7 @@
 import ErrorMessage from "@/components/ErrorMessage";
 import FavoriteButton from "@/components/FavoriteButton";
 import HotelImage from "@/components/HotelImage";
+import LayoutShell from "@/components/LayoutShell";
 import LoadingState from "@/components/LoadingState";
 import PriceHistorySection from "@/components/PriceHistorySection";
 import { fetchHotelById, HotelApiError } from "@/lib/hotelApi";
@@ -136,17 +137,18 @@ export default function HotelDetailPage({
     (primaryOffer?.isDateSpecific ? "指定日の最安値" : "参考最安値");
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-8 text-slate-900 sm:px-6 sm:py-12">
-      <div className="mx-auto max-w-6xl">
+    <LayoutShell>
+      <main className="px-5 py-8 text-slate-900 sm:px-6 sm:py-10">
+        <div className="mx-auto max-w-6xl">
         <Link
-          className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-sky-700 transition hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-blue-600 transition hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
           href="/"
         >
           <span aria-hidden="true">←</span>
           ホテル一覧へ戻る
         </Link>
 
-        <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <HotelImage
             alt={`${hotel.name}の客室イメージ`}
             src={hotel.imageUrl}
@@ -156,7 +158,7 @@ export default function HotelDetailPage({
           <div className="p-6 sm:p-9">
             <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="font-semibold text-sky-700">{hotel.area}</p>
+                <p className="font-semibold text-blue-600">{hotel.area}</p>
                 <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
                   {hotel.name}
                 </h1>
@@ -166,17 +168,17 @@ export default function HotelDetailPage({
               </div>
               <span className="w-fit shrink-0 rounded-lg bg-amber-50 px-3 py-2 font-bold text-amber-700">
                 {typeof hotel.rating === "number" && Number.isFinite(hotel.rating)
-                  ? `★ ${hotel.rating.toFixed(1)}`
+                  ? `評価 ${hotel.rating.toFixed(1)}`
                   : "評価未取得"}
               </span>
             </header>
 
             <section
               aria-labelledby="lowest-price-heading"
-              className="mt-8 rounded-2xl bg-sky-50 p-5 ring-1 ring-inset ring-sky-100 sm:p-6"
+              className="mt-8 rounded-2xl border border-blue-100 bg-blue-50 p-5 sm:p-6"
             >
               <h2
-                className="text-sm font-bold text-sky-700"
+                className="text-sm font-bold text-blue-600"
                 id="lowest-price-heading"
               >
                 {priceLabel}
@@ -204,7 +206,7 @@ export default function HotelDetailPage({
 
             <section className="mt-10" aria-labelledby="offer-heading">
               <div className="mb-5">
-                <p className="text-sm font-semibold text-sky-700">料金を比較</p>
+                <p className="text-sm font-semibold text-blue-600">料金を比較</p>
                 <h2
                   className="mt-1 text-2xl font-bold tracking-tight"
                   id="offer-heading"
@@ -240,7 +242,7 @@ export default function HotelDetailPage({
                             <div className="flex items-center gap-2">
                               {offer.site}
                               {offer.priceLabel && (
-                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
+                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-600">
                                   {offer.priceLabel}
                                 </span>
                               )}
@@ -257,7 +259,7 @@ export default function HotelDetailPage({
                             {offer.bookingUrl.trim() ? (
                               <a
                                 aria-label={`${offer.site}で${hotel.name}を予約する`}
-                                className="inline-flex whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2.5 font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                                className="inline-flex whitespace-nowrap rounded-xl bg-blue-600 px-4 py-2.5 font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
                                 href={offer.bookingUrl.trim()}
                                 rel="noopener noreferrer"
                                 target="_blank"
@@ -284,33 +286,37 @@ export default function HotelDetailPage({
           </div>
         </article>
 
-        <PriceHistorySection hotel={hotel} hotelId={hotel.id} />
-      </div>
-    </main>
+          <PriceHistorySection hotel={hotel} hotelId={hotel.id} />
+        </div>
+      </main>
+    </LayoutShell>
   );
 }
 
 function StatusShell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-16 text-slate-900">
-      <div className="mx-auto max-w-xl">
+    <LayoutShell>
+      <main className="px-5 py-16 text-slate-900">
+        <div className="mx-auto max-w-xl">
         <Link
-          className="mb-6 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          className="mb-6 inline-flex text-sm font-bold text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
           href="/"
         >
           ホテル一覧へ戻る
         </Link>
         {children}
-      </div>
-    </main>
+        </div>
+      </main>
+    </LayoutShell>
   );
 }
 
 function DetailNotFound() {
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-16 text-slate-900">
-      <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
-        <p className="text-sm font-bold text-sky-700">404 Not Found</p>
+    <LayoutShell>
+      <main className="px-5 py-16 text-slate-900">
+        <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
+        <p className="text-sm font-bold text-blue-600">404 Not Found</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">
           ページが見つかりません
         </h1>
@@ -318,12 +324,13 @@ function DetailNotFound() {
           指定されたホテル情報は存在しないか、削除された可能性があります。
         </p>
         <Link
-          className="mt-7 inline-flex h-11 items-center justify-center rounded-lg bg-sky-700 px-5 text-sm font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200"
+          className="mt-7 inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
           href="/"
         >
           トップページへ戻る
         </Link>
-      </div>
-    </main>
+        </div>
+      </main>
+    </LayoutShell>
   );
 }

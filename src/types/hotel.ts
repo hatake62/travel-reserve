@@ -28,6 +28,7 @@ export type Hotel = {
   name: string;
   area: string;
   rating?: number | null;
+  reviewCount?: number | null;
   hotelClass?: number | null;
   amenities?: string[];
   amenityText?: string;

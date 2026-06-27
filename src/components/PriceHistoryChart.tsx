@@ -35,7 +35,7 @@ export default function PriceHistoryChart({ points }: PriceHistoryChartProps) {
   const missingCount = points.length - prices.length;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="text-xs font-bold text-slate-500">データ点数</p>
@@ -99,7 +99,7 @@ export default function PriceHistoryChart({ points }: PriceHistoryChartProps) {
               dataKey="price"
               dot={{ r: 4 }}
               name="料金"
-              stroke="#0369a1"
+              stroke="#2563eb"
               strokeWidth={3}
               type="monotone"
             />

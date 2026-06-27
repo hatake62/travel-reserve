@@ -3,21 +3,23 @@
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
 import FilterChips from "@/components/FilterChips";
+import BottomValueCards from "@/components/BottomValueCards";
 import HotelCard from "@/components/HotelCard";
+import HotelFiltersSidebar from "@/components/HotelFiltersSidebar";
+import LayoutShell from "@/components/LayoutShell";
 import LoadingState from "@/components/LoadingState";
-import MapPlaceholder from "@/components/MapPlaceholder";
 import Pagination from "@/components/Pagination";
 import SearchForm from "@/components/SearchForm";
 import SearchSummary from "@/components/SearchSummary";
 import { fetchHotels, HotelApiError, type HotelSearchPagination } from "@/lib/hotelApi";
+import { getLowestValidPrice } from "@/lib/price";
 import {
   DEFAULT_SEARCH_CONDITION,
   searchConditionToParams,
   searchParamsToCondition,
 } from "@/lib/searchParams";
 import type { Hotel } from "@/types/hotel";
-import type { SearchCondition } from "@/types/search";
-import Link from "next/link";
+import type { SearchCondition, SortBy } from "@/types/search";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Suspense,
@@ -55,6 +57,8 @@ function HomeContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<PageError | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<SortBy>("recommended");
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     urlCondition,
   );
@@ -157,106 +161,134 @@ function HomeContent() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const filteredHotels = hotels;
+  const filteredHotels = useMemo(() => {
+    return [...hotels].sort((a, b) => {
+      if (sortBy === "ratingDesc") {
+        return (b.rating ?? 0) - (a.rating ?? 0);
+      }
+      if (sortBy === "priceAsc" || sortBy === "priceDesc") {
+        const priceA = getLowestValidPrice(a.offers);
+        const priceB = getLowestValidPrice(b.offers);
+        if (priceA === undefined) return priceB === undefined ? 0 : 1;
+        if (priceB === undefined) return -1;
+        return sortBy === "priceAsc" ? priceA - priceB : priceB - priceA;
+      }
+      return 0;
+    });
+  }, [hotels, sortBy]);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 sm:px-6 sm:py-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-6 flex flex-col gap-5 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
-              Hotel Price Tracker
-            </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-              ホテルを探して、気になる宿の価格推移を追跡。
+    <LayoutShell>
+      <main className="px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mx-auto max-w-6xl">
+          <header className="mb-6">
+            <p className="text-sm font-semibold text-blue-600">Hotel discovery</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+              ホテルを探す
             </h1>
-            <p className="mt-2 max-w-2xl text-base leading-7 text-slate-600">
-              ホテルを探してお気に入りに追加すると、宿泊日の価格推移を追跡できます。
+            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+              行き先を決めて、気になるホテルをお気に入りに追加しましょう
             </p>
+          </header>
+
+          <SearchForm
+            initialCondition={urlCondition}
+            isLoading={isLoading}
+            key={serializedSearchParams}
+            onReset={handleReset}
+            onSearch={handleSearch}
+          />
+          <FilterChips condition={searchCondition} onChange={applyCondition} />
+
+          <div className="mt-6 lg:hidden">
+            <button
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm"
+              onClick={() => setIsMobileFiltersOpen((value) => !value)}
+              type="button"
+            >
+              {isMobileFiltersOpen ? "絞り込みを閉じる" : "絞り込みを開く"}
+            </button>
+            {isMobileFiltersOpen && (
+              <div className="mt-3">
+                <HotelFiltersSidebar condition={searchCondition} onChange={applyCondition} />
+              </div>
+            )}
           </div>
-          <Link
-            className="inline-flex w-fit rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 focus:outline-none focus:ring-4 focus:ring-amber-200"
-            href="/favorites"
+
+          <section
+            className="mt-8 grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]"
+            aria-labelledby="hotel-list-heading"
           >
-            ★ お気に入りを見る
-          </Link>
-        </header>
-
-        <SearchForm
-          initialCondition={urlCondition}
-          isLoading={isLoading}
-          key={serializedSearchParams}
-          onReset={handleReset}
-          onSearch={handleSearch}
-        />
-        <FilterChips condition={searchCondition} onChange={applyCondition} />
-
-        <section className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(360px,2fr)]" aria-labelledby="hotel-list-heading">
-          <div className="min-w-0">
-            <SearchSummary
-              condition={searchCondition}
-              displayedCount={filteredHotels.length}
-              pagination={pagination}
-              warning={noticeMessage}
-            />
-
-            <div className="mt-5">
-              {isLoading ? (
-                <LoadingState />
-              ) : error ? (
-                <ErrorMessage
-                  hint={error.hint}
-                  message={error.message}
-                  onRetry={handleRetry}
-                />
-              ) : filteredHotels.length > 0 ? (
-                <div className="grid gap-4">
-                  {filteredHotels.map((hotel) => (
-                    <HotelCard
-                      hotel={hotel}
-                      key={hotel.id}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  actionLabel="条件をリセット"
-                  message="設備条件をゆるめてください。価格帯や評価条件も見直せます。"
-                  onAction={handleReset}
-                />
-              )}
-              {pagination && !error && (
-                <Pagination
-                  isLoading={isLoading}
-                  onPageChange={handlePageChange}
-                  pagination={pagination}
-                />
-              )}
+            <div className="hidden lg:sticky lg:top-20 lg:block">
+              <HotelFiltersSidebar condition={searchCondition} onChange={applyCondition} />
             </div>
-          </div>
-          <div className="lg:sticky lg:top-6">
-            <MapPlaceholder
-              areaName={searchCondition.destination}
-              hotelCount={filteredHotels.length}
-            />
-          </div>
-        </section>
-        <footer className="mt-12 border-t border-slate-200 pt-6">
-          <p className="text-sm leading-6 text-slate-600">
-            トップ画面では参考最安値を表示しています。指定日の価格推移はお気に入り追加後に確認できます。実際の料金・設備・食事条件は楽天トラベルで確認してください。
-          </p>
-        </footer>
-      </div>
-    </main>
+            <div className="min-w-0">
+              <SearchSummary
+                condition={searchCondition}
+                displayedCount={filteredHotels.length}
+                onSortChange={setSortBy}
+                pagination={pagination}
+                sortBy={sortBy}
+                warning={noticeMessage}
+              />
+
+              <div className="mt-5">
+                {isLoading ? (
+                  <LoadingState />
+                ) : error ? (
+                  <ErrorMessage
+                    hint={error.hint}
+                    message={error.message}
+                    onRetry={handleRetry}
+                  />
+                ) : filteredHotels.length > 0 ? (
+                  <div className="grid gap-4">
+                    {filteredHotels.map((hotel) => (
+                      <HotelCard
+                        hotel={hotel}
+                        key={hotel.id}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    actionLabel="条件をリセット"
+                    message="価格帯や設備条件をゆるめて再検索してください"
+                    onAction={handleReset}
+                  />
+                )}
+                {pagination && !error && (
+                  <Pagination
+                    isLoading={isLoading}
+                    onPageChange={handlePageChange}
+                    pagination={pagination}
+                  />
+                )}
+              </div>
+            </div>
+          </section>
+
+          <BottomValueCards />
+
+          <footer className="mt-8">
+            <p className="text-sm leading-6 text-slate-500">
+              トップ画面では参考最安値を表示しています。指定日の価格推移はお気に入り追加後に確認できます。実際の料金・設備・食事条件は楽天トラベルで確認してください。
+            </p>
+          </footer>
+        </div>
+      </main>
+    </LayoutShell>
   );
 }
 
 function HomeLoading() {
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-6 sm:py-14">
-      <div className="mx-auto max-w-6xl">
-        <LoadingState message="画面を読み込んでいます..." />
-      </div>
-    </main>
+    <LayoutShell>
+      <main className="px-5 py-10 text-slate-900 sm:px-6 sm:py-14">
+        <div className="mx-auto max-w-6xl">
+          <LoadingState message="画面を読み込んでいます..." />
+        </div>
+      </main>
+    </LayoutShell>
   );
 }

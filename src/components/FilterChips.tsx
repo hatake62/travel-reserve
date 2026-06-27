@@ -80,7 +80,7 @@ export default function FilterChips({ condition, onChange }: FilterChipsProps) {
       {chips.map((chip) => (
         <button
           aria-label={`${chip.label} の条件を削除`}
-          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-100"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100 focus:outline-none focus:ring-4 focus:ring-blue-100"
           key={chip.key}
           onClick={() => onChange(chip.remove())}
           type="button"

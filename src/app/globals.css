@@ -17,9 +17,16 @@ body {
   margin: 0;
   background: #f8fafc;
   font-family: Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  color: #0f172a;
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }

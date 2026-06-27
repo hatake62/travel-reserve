@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { AMENITY_OPTIONS, DEFAULT_SEARCH_CONDITION } from "@/lib/searchParams";
+import { DEFAULT_SEARCH_CONDITION } from "@/lib/searchParams";
 import type { RakutenAreaCandidate } from "@/types/rakutenArea";
-import type { Amenity, SearchCondition } from "@/types/search";
+import type { SearchCondition } from "@/types/search";
 
 type SearchFormProps = {
   onSearch: (condition: SearchCondition) => void;
@@ -12,8 +12,8 @@ type SearchFormProps = {
   isLoading?: boolean;
 };
 
-const fieldClassName =
-  "min-h-14 w-full border-0 bg-transparent px-0 text-sm font-semibold text-slate-950 outline-none placeholder:text-slate-400 focus:ring-0";
+const inputClassName =
+  "h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
 
 export default function SearchForm({
   onSearch,
@@ -28,14 +28,9 @@ export default function SearchForm({
   const [maxPrice, setMaxPrice] = useState(
     initialCondition.maxPrice === null ? "" : String(initialCondition.maxPrice),
   );
-  const [minUserRating, setMinUserRating] = useState(
-    initialCondition.minUserRating === null ? "" : String(initialCondition.minUserRating),
+  const [rakutenAreaCandidate, setRakutenAreaCandidate] = useState<RakutenAreaCandidate | undefined>(
+    initialCondition.rakutenAreaCandidate,
   );
-  const [minHotelClass, setMinHotelClass] = useState(
-    initialCondition.minHotelClass === null ? "" : String(initialCondition.minHotelClass),
-  );
-  const [amenities, setAmenities] = useState<Amenity[]>(initialCondition.amenities);
-  const [rakutenAreaCandidate, setRakutenAreaCandidate] = useState<RakutenAreaCandidate>();
   const [areaCandidates, setAreaCandidates] = useState<RakutenAreaCandidate[]>([]);
   const [isLoadingAreas, setIsLoadingAreas] = useState(false);
   const [areaError, setAreaError] = useState<string | null>(null);
@@ -44,9 +39,6 @@ export default function SearchForm({
     setDestination(DEFAULT_SEARCH_CONDITION.destination);
     setMinPrice("");
     setMaxPrice("");
-    setMinUserRating("");
-    setMinHotelClass("");
-    setAmenities([]);
     setRakutenAreaCandidate(undefined);
     setAreaCandidates([]);
     setAreaError(null);
@@ -97,17 +89,14 @@ export default function SearchForm({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSearch({
+      ...initialCondition,
       destination,
       checkIn: "",
       checkOut: "",
       guests: DEFAULT_SEARCH_CONDITION.guests,
-      sortBy: DEFAULT_SEARCH_CONDITION.sortBy,
       mealPlan: "",
       minPrice: minPrice === "" ? null : Number(minPrice),
       maxPrice: maxPrice === "" ? null : Number(maxPrice),
-      minUserRating: minUserRating === "" ? null : Number(minUserRating),
-      minHotelClass: minHotelClass === "" ? null : Number(minHotelClass),
-      amenities,
       features: [],
       site: "",
       breakfastOnly: false,
@@ -118,195 +107,140 @@ export default function SearchForm({
 
   return (
     <form
-      className="rounded-3xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70"
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
       noValidate
       onSubmit={handleSubmit}
     >
-      <div className="grid gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white lg:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
-          <label className="block text-xs font-bold text-slate-500" htmlFor="destination">
+      <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_160px_160px_auto] lg:items-end">
+        <div className="relative">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-500" htmlFor="destination">
             目的地
           </label>
-          <input
-            className={fieldClassName}
-            id="destination"
-            name="destination"
-            onChange={(event) => {
-              setDestination(event.target.value);
-              setRakutenAreaCandidate(undefined);
-              setAreaCandidates([]);
-              setAreaError(null);
-            }}
-            placeholder="例: 東京、栃木、日光、那須"
-            type="text"
-            value={destination}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              aria-label="楽天トラベルの地区候補を検索"
-              className="rounded-full border border-sky-700 px-3 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 disabled:cursor-wait disabled:border-slate-300 disabled:text-slate-400"
-              disabled={isLoadingAreas}
-              onClick={handleFindAreas}
-              type="button"
+          <div className="relative">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             >
-              {isLoadingAreas ? "候補取得中" : "地区候補"}
-            </button>
-            {rakutenAreaCandidate && (
-              <span className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800" role="status">
-                地区選択済み
-              </span>
+              ⌖
+            </span>
+            <input
+              className={`${inputClassName} pl-9 pr-10`}
+              id="destination"
+              name="destination"
+              onChange={(event) => {
+                setDestination(event.target.value);
+                setRakutenAreaCandidate(undefined);
+                setAreaCandidates([]);
+                setAreaError(null);
+              }}
+              placeholder="東京、栃木、日光、那須"
+              type="text"
+              value={destination}
+            />
+            {destination && (
+              <button
+                aria-label="目的地をクリア"
+                className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => {
+                  setDestination("");
+                  setRakutenAreaCandidate(undefined);
+                  setAreaCandidates([]);
+                  setAreaError(null);
+                }}
+                type="button"
+              >
+                ×
+              </button>
             )}
           </div>
-          {areaError && <p className="text-xs text-rose-700" role="alert">{areaError}</p>}
-          {areaCandidates.length > 0 && (
-            <ul className="mt-2 grid gap-1 rounded-xl border border-slate-200 bg-slate-50 p-2">
-              {areaCandidates.map((candidate) => (
-                <li key={`${candidate.areaClassCode}-${candidate.middleClassCode}-${candidate.smallClassCode}-${candidate.detailClassCode}-${candidate.displayName}`}>
-                  <button
-                    className="w-full rounded-md px-2 py-2 text-left text-xs font-medium text-slate-700 hover:bg-white hover:text-sky-800"
-                    onClick={() => {
-                      setDestination(candidate.label ?? candidate.displayName);
-                      setRakutenAreaCandidate(candidate);
-                      setAreaCandidates([]);
-                      setAreaError(null);
-                    }}
-                    type="button"
-                  >
-                    {candidate.label ?? candidate.displayName}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
 
-        <div className="p-3">
-          <button
-            aria-label="指定した条件でホテルを検索"
-            className="h-full min-h-12 w-full rounded-2xl bg-sky-700 px-7 text-base font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-wait disabled:bg-slate-400"
-            disabled={isLoading}
-            type="submit"
-          >
-            {isLoading ? "検索中" : "検索"}
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="minPrice">
-          価格下限
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-semibold text-slate-500">最低価格</span>
           <input
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            id="minPrice"
+            className={inputClassName}
             inputMode="numeric"
             min="0"
             name="minPrice"
             onChange={(event) => setMinPrice(event.target.value)}
-            placeholder="例: 5000"
+            placeholder="5,000"
             step="100"
             type="number"
             value={minPrice}
           />
         </label>
 
-        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="maxPrice">
-          価格上限
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-semibold text-slate-500">最高価格</span>
           <input
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            id="maxPrice"
+            className={inputClassName}
             inputMode="numeric"
             min="0"
             name="maxPrice"
             onChange={(event) => setMaxPrice(event.target.value)}
-            placeholder="例: 20000"
+            placeholder="20,000"
             step="100"
             type="number"
             value={maxPrice}
           />
         </label>
 
-        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="minUserRating">
-          利用者評価
-          <select
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            id="minUserRating"
-            name="minUserRating"
-            onChange={(event) => setMinUserRating(event.target.value)}
-            value={minUserRating}
-          >
-            <option value="">指定なし</option>
-            <option value="3">3.0以上</option>
-            <option value="3.5">3.5以上</option>
-            <option value="4">4.0以上</option>
-            <option value="4.5">4.5以上</option>
-          </select>
-        </label>
-
-        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="minHotelClass">
-          ホテルクラス
-          <select
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            id="minHotelClass"
-            name="minHotelClass"
-            onChange={(event) => setMinHotelClass(event.target.value)}
-            value={minHotelClass}
-          >
-            <option value="">指定なし</option>
-            <option value="3">3つ星以上</option>
-            <option value="4">4つ星以上</option>
-            <option value="5">5つ星</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="mt-4 flex flex-col gap-4 border-t border-slate-200 pt-4 lg:flex-row lg:items-center lg:justify-between">
-        <fieldset>
-          <legend className="mb-1 text-xs font-bold text-slate-500">設備条件</legend>
-          <p className="mb-2 text-xs font-semibold text-slate-500">
-            ホテルクラスは取得できる範囲で絞り込みます。
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {AMENITY_OPTIONS.map((option) => {
-              const checked = amenities.includes(option.value);
-              return (
-                <label
-                  className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${
-                    checked
-                      ? "border-sky-700 bg-sky-50 text-sky-800"
-                      : "border-slate-300 bg-white text-slate-700 hover:border-sky-300"
-                  }`}
-                  key={option.value}
-                >
-                  <input
-                    checked={checked}
-                    className="sr-only"
-                    onChange={(event) => {
-                      setAmenities((current) =>
-                        event.target.checked
-                          ? [...current, option.value]
-                          : current.filter((value) => value !== option.value),
-                      );
-                    }}
-                    type="checkbox"
-                  />
-                  {option.label}
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
           <button
-            className="h-11 rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:cursor-wait disabled:text-slate-400"
+            className="h-12 rounded-xl bg-blue-600 px-6 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-wait disabled:bg-slate-300"
+            disabled={isLoading}
+            type="submit"
+          >
+            {isLoading ? "検索中" : "検索する"}
+          </button>
+          <button
+            className="h-10 px-2 text-sm font-semibold text-slate-500 transition hover:text-blue-600 disabled:text-slate-300"
             disabled={isLoading}
             onClick={handleReset}
             type="button"
           >
-            条件をリセット
+            条件をクリア
           </button>
         </div>
       </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-wait disabled:text-slate-300"
+          disabled={isLoadingAreas}
+          onClick={handleFindAreas}
+          type="button"
+        >
+          {isLoadingAreas ? "地区候補を取得中" : "地区候補から選ぶ"}
+        </button>
+        {rakutenAreaCandidate && (
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600">
+            地区選択済み
+          </span>
+        )}
+        {areaError && <p className="text-xs font-semibold text-rose-700">{areaError}</p>}
+      </div>
+
+      {areaCandidates.length > 0 && (
+        <ul className="mt-3 grid gap-1 rounded-xl border border-slate-200 bg-slate-50 p-2">
+          {areaCandidates.map((candidate) => (
+            <li key={`${candidate.areaClassCode}-${candidate.middleClassCode}-${candidate.smallClassCode}-${candidate.detailClassCode}-${candidate.displayName}`}>
+              <button
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-white hover:text-blue-600"
+                onClick={() => {
+                  setDestination(candidate.label ?? candidate.displayName);
+                  setRakutenAreaCandidate(candidate);
+                  setAreaCandidates([]);
+                  setAreaError(null);
+                }}
+                type="button"
+              >
+                {candidate.label ?? candidate.displayName}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </form>
   );
 }
