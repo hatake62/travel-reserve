@@ -5,7 +5,10 @@ import { validateHotelSearch } from "@/lib/searchValidation";
 import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
 import type { Hotel } from "@/types/hotel";
 
-const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = 10;
+const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = Math.max(
+  0,
+  Math.min(3, Number(process.env.RAKUTEN_LIST_PRICE_ENRICH_LIMIT ?? "0") || 0),
+);
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 30;
 

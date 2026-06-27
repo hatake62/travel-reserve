@@ -38,7 +38,7 @@ export default function HotelCard({ hotel, checkIn, checkOut, adults }: HotelCar
                 {hotel.name}
               </h2>
               <div className="mt-3">
-                <FavoriteButton hotelId={String(hotel.id)} />
+                <FavoriteButton hotel={hotel} hotelId={String(hotel.id)} />
               </div>
             </div>
             <span className="shrink-0 rounded-md bg-amber-50 px-2.5 py-1 text-sm font-bold text-amber-700">

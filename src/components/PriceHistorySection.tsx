@@ -4,12 +4,15 @@ import ErrorMessage from "@/components/ErrorMessage";
 import LoadingState from "@/components/LoadingState";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
 import type { BookingLinksResponse } from "@/types/bookingLinks";
-import type { PriceHistoryResponse } from "@/types/priceHistory";
+import type { PriceHistoryResponse, PriceWatchTarget } from "@/types/priceHistory";
+import { getFavoriteHotelIdsSnapshot, subscribeToFavoriteHotelIds, upsertFavoriteHotel } from "@/lib/favorites";
+import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 type PriceHistorySectionProps = {
   hotelId: string | number;
+  hotel: Hotel;
 };
 
 type CaptureSnapshotSummary = {
@@ -55,6 +58,7 @@ function formatSavedPrice(price: number | null): string {
 
 export default function PriceHistorySection({
   hotelId,
+  hotel,
 }: PriceHistorySectionProps) {
   const defaultDates = getDefaultDates();
   const [checkInDate, setCheckInDate] = useState(defaultDates.checkInDate);
@@ -65,9 +69,16 @@ export default function PriceHistorySection({
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [isLoadingBookingLinks, setIsLoadingBookingLinks] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const favoriteIdsSnapshot = useSyncExternalStore(
+    subscribeToFavoriteHotelIds,
+    getFavoriteHotelIdsSnapshot,
+    () => "[]",
+  );
+  const isFavorite = (JSON.parse(favoriteIdsSnapshot) as string[]).includes(String(hotelId));
 
   async function loadPriceHistory(clearNotice = true) {
     setIsLoading(true);
@@ -115,9 +126,14 @@ export default function PriceHistorySection({
       const response = await fetch("/api/price-watch/targets", {
         body: JSON.stringify({
           hotelId: String(hotelId),
+          provider: "rakuten",
           checkInDate,
           checkOutDate,
           adults,
+          hotelName: hotel.name,
+          imageUrl: hotel.imageUrl ?? "",
+          address: hotel.area,
+          bookingUrl: hotel.offers[0]?.bookingUrl ?? "",
         }),
         headers: {
           Accept: "application/json",
@@ -132,8 +148,9 @@ export default function PriceHistorySection({
       if (!response.ok) {
         throw new Error(data.error ?? "料金推移の記録開始に失敗しました");
       }
+      upsertFavoriteHotel(hotel);
       setNotice(
-        "この条件を追跡対象に追加しました。今すぐ保存する場合は、現在価格を1回取得してください。",
+        "価格追跡を開始しました。お気に入りにも追加しました。今すぐ保存する場合は、現在価格を1回取得してください。",
       );
     } catch (error) {
       setError(
@@ -143,6 +160,65 @@ export default function PriceHistorySection({
       );
     } finally {
       setIsRegistering(false);
+    }
+  }
+
+  async function stopPriceWatchTarget() {
+    setIsStopping(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const listResponse = await fetch("/api/price-watch/targets", {
+        headers: { Accept: "application/json" },
+      });
+      const listData = (await listResponse.json().catch(() => ({}))) as {
+        error?: string;
+        targets?: PriceWatchTarget[];
+      };
+      if (!listResponse.ok) {
+        throw new Error(listData.error ?? "追跡対象の取得に失敗しました");
+      }
+
+      const target = (listData.targets ?? []).find(
+        (candidate) =>
+          candidate.enabled &&
+          candidate.hotelId === String(hotelId) &&
+          candidate.checkInDate === checkInDate &&
+          candidate.checkOutDate === checkOutDate &&
+          candidate.adults === adults,
+      );
+
+      if (!target?.id) {
+        throw new Error("この条件の追跡対象が見つかりませんでした");
+      }
+
+      const response = await fetch(
+        `/api/price-watch/targets/${encodeURIComponent(target.id)}`,
+        {
+          body: JSON.stringify({ enabled: false }),
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          method: "PATCH",
+        },
+      );
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.error ?? "価格追跡の停止に失敗しました");
+      }
+      setNotice(
+        "この宿泊条件の価格追跡を停止しました。お気に入りからは削除していません。",
+      );
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "価格追跡の停止に失敗しました",
+      );
+    } finally {
+      setIsStopping(false);
     }
   }
 
@@ -239,6 +315,19 @@ export default function PriceHistorySection({
     }
   }
 
+  if (!isFavorite) {
+    return (
+      <section className="mt-10 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-bold text-slate-900">料金推移</h2>
+        <p className="mt-2 text-sm text-slate-600">価格遷移を見るにはお気に入りに追加してください。価格追跡を開始すると、お気に入りにも自動追加されます。</p>
+        <button className="mt-4 h-11 rounded-lg bg-sky-700 px-5 text-sm font-bold text-white disabled:bg-slate-300" disabled={isRegistering} onClick={registerPriceWatchTarget} type="button">
+          {isRegistering ? "開始中..." : "お気に入りに追加して価格追跡を開始"}
+        </button>
+        {error && <p className="mt-3 text-sm font-semibold text-rose-700">{error}</p>}
+      </section>
+    );
+  }
+
   return (
     <section
       aria-labelledby="price-history-heading"
@@ -307,7 +396,7 @@ export default function PriceHistorySection({
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <button
           className="h-11 rounded-lg bg-sky-700 px-5 text-sm font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
+          disabled={isLoading || isRegistering || isCapturing || isStopping || isLoadingBookingLinks}
           onClick={() => {
             void loadPriceHistory();
           }}
@@ -317,7 +406,7 @@ export default function PriceHistorySection({
         </button>
         <button
           className="h-11 rounded-lg border border-sky-700 px-5 text-sm font-bold text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
-          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
+          disabled={isLoading || isRegistering || isCapturing || isStopping || isLoadingBookingLinks}
           onClick={registerPriceWatchTarget}
           type="button"
         >
@@ -327,7 +416,7 @@ export default function PriceHistorySection({
         </button>
         <button
           className="h-11 rounded-lg border border-amber-600 px-5 text-sm font-bold text-amber-700 transition hover:bg-amber-50 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
-          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
+          disabled={isLoading || isRegistering || isCapturing || isStopping || isLoadingBookingLinks}
           onClick={captureOnce}
           type="button"
         >
@@ -335,13 +424,21 @@ export default function PriceHistorySection({
         </button>
         <button
           className="h-11 rounded-lg bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={isLoading || isRegistering || isCapturing || isLoadingBookingLinks}
+          disabled={isLoading || isRegistering || isCapturing || isStopping || isLoadingBookingLinks}
           onClick={loadBookingLinks}
           type="button"
         >
           {isLoadingBookingLinks
             ? "予約リンク取得中..."
             : "指定条件の楽天プランを見る"}
+        </button>
+        <button
+          className="h-11 rounded-lg border border-rose-600 px-5 text-sm font-bold text-rose-700 transition hover:bg-rose-50 focus:outline-none focus:ring-4 focus:ring-rose-200 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+          disabled={isLoading || isRegistering || isCapturing || isStopping || isLoadingBookingLinks}
+          onClick={stopPriceWatchTarget}
+          type="button"
+        >
+          {isStopping ? "停止中..." : "価格追跡を停止"}
         </button>
       </div>
 

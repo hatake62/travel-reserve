@@ -13,6 +13,10 @@ type PriceWatchTargetRequest = {
   checkInDate?: unknown;
   checkOutDate?: unknown;
   adults?: unknown;
+  hotelName?: unknown;
+  imageUrl?: unknown;
+  address?: unknown;
+  bookingUrl?: unknown;
 };
 
 function isDateString(value: unknown): value is string {
@@ -69,7 +73,18 @@ export async function POST(request: Request) {
       enabled: true,
     });
 
-    return NextResponse.json({ target });
+    return NextResponse.json({
+      ok: true,
+      target,
+      favoriteHotel: {
+        id: hotelId,
+        name: typeof body.hotelName === "string" ? body.hotelName : "",
+        imageUrl: typeof body.imageUrl === "string" ? body.imageUrl : "",
+        address: typeof body.address === "string" ? body.address : "",
+        provider: "rakuten",
+        bookingUrl: typeof body.bookingUrl === "string" ? body.bookingUrl : "",
+      },
+    });
   } catch (error) {
     const message =
       error instanceof Error

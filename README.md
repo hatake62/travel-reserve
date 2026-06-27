@@ -191,9 +191,9 @@ USE_MOCK_HOTELS=false
 USE_RAKUTEN_PROVIDER=true
 USE_JALAN_PROVIDER=false
 
-RAKUTEN_TRAVEL_APP_ID=実際の値
-RAKUTEN_TRAVEL_ACCESS_KEY=実際の値
-RAKUTEN_AFFILIATE_ID=任意
+RAKUTEN_TRAVEL_APP_ID=YOUR_RAKUTEN_APP_ID
+RAKUTEN_TRAVEL_ACCESS_KEY=YOUR_RAKUTEN_ACCESS_KEY
+RAKUTEN_AFFILIATE_ID=YOUR_RAKUTEN_AFFILIATE_ID
 RAKUTEN_ALLOWED_ORIGIN=https://travel-reserve.vercel.app
 ```
 
@@ -204,7 +204,7 @@ USE_MOCK_HOTELS=false
 USE_RAKUTEN_PROVIDER=false
 USE_JALAN_PROVIDER=true
 
-JALAN_API_KEY=実際の値
+JALAN_API_KEY=YOUR_JALAN_API_KEY
 ```
 
 段階4: 楽天 + じゃらん
@@ -214,11 +214,11 @@ USE_MOCK_HOTELS=false
 USE_RAKUTEN_PROVIDER=true
 USE_JALAN_PROVIDER=true
 
-RAKUTEN_TRAVEL_APP_ID=実際の値
-RAKUTEN_TRAVEL_ACCESS_KEY=実際の値
-RAKUTEN_AFFILIATE_ID=任意
+RAKUTEN_TRAVEL_APP_ID=YOUR_RAKUTEN_APP_ID
+RAKUTEN_TRAVEL_ACCESS_KEY=YOUR_RAKUTEN_ACCESS_KEY
+RAKUTEN_AFFILIATE_ID=YOUR_RAKUTEN_AFFILIATE_ID
 RAKUTEN_ALLOWED_ORIGIN=https://travel-reserve.vercel.app
-JALAN_API_KEY=実際の値
+JALAN_API_KEY=YOUR_JALAN_API_KEY
 ```
 
 ## Vercel公開後の確認項目
@@ -663,6 +663,17 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 ```
 
 `debug=true` では、アプリ側のページ番号・offset・件数、楽天APIの取得ページ数、地区フォールバック、指定日価格補完の件数を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
+
+## お気に入り中心の価格追跡
+
+このアプリでは、お気に入りに追加したホテルの価格推移を確認することを重視しています。価格履歴グラフは、お気に入りホテルまたは価格追跡を開始したホテルだけに表示します。
+
+- お気に入りはブラウザのlocalStorageにホテル情報とともに保存します。
+- 価格追跡を開始すると、同じホテルを自動でお気に入りにも追加します。
+- 追跡対象はDBの`hotel_price_watch_targets`に保存され、Cronは`enabled=true`の対象だけを毎日取得します。
+- お気に入り解除と価格追跡停止は別操作です。お気に入りを外してもCron追跡は停止しません。
+- 楽天API制限を避けるため、検索一覧の指定日価格補完は既定で無効です。必要な場合だけ`RAKUTEN_LIST_PRICE_ENRICH_LIMIT`を1〜3に設定してください。
+- 実際の料金、空室、予約条件は楽天トラベル側で確認してください。
 
 ## 楽天地区候補検索
 

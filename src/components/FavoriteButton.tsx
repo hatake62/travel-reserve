@@ -2,18 +2,21 @@
 
 import {
   getFavoriteHotelIdsSnapshot,
+  removeFavoriteHotel,
   subscribeToFavoriteHotelIds,
-  toggleFavoriteHotelId,
+  upsertFavoriteHotel,
 } from "@/lib/favorites";
+import type { Hotel } from "@/types/hotel";
 import { useSyncExternalStore } from "react";
 
 type FavoriteButtonProps = {
   hotelId: string | number;
+  hotel?: Hotel;
 };
 
 const getServerSnapshot = () => "[]";
 
-export default function FavoriteButton({ hotelId }: FavoriteButtonProps) {
+export default function FavoriteButton({ hotelId, hotel }: FavoriteButtonProps) {
   const id = String(hotelId);
   const favoriteIdsSnapshot = useSyncExternalStore(
     subscribeToFavoriteHotelIds,
@@ -30,7 +33,14 @@ export default function FavoriteButton({ hotelId }: FavoriteButtonProps) {
           ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
           : "border-slate-300 bg-white text-slate-700 hover:border-amber-300 hover:text-amber-700"
       }`}
-      onClick={() => toggleFavoriteHotelId(id)}
+      onClick={() => {
+        if (isFavorite) {
+          const shouldRemove = window.confirm(
+            "このホテルは価格追跡中の場合があります。お気に入りから削除しても価格追跡は停止されません。価格追跡を止める場合は、価格追跡停止ボタンを押してください。",
+          );
+          if (shouldRemove) removeFavoriteHotel(id);
+        } else if (hotel) upsertFavoriteHotel(hotel);
+      }}
       type="button"
     >
       {isFavorite ? "★ お気に入り済み" : "☆ お気に入り"}
