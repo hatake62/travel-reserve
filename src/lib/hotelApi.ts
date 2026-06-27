@@ -1,5 +1,6 @@
 import type { Hotel } from "@/types/hotel";
 import type { HotelSearchParams } from "@/types/search";
+import { searchCriteriaToApiParams } from "@/lib/searchParams";
 import {
   getErrorMessageFromResponse,
   type ApiErrorResponse,
@@ -56,6 +57,7 @@ async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 export async function fetchHotels({
+  criteria,
   keyword,
   checkIn,
   checkOut,
@@ -76,7 +78,7 @@ export async function fetchHotels({
   onNotice,
 }: FetchHotelsOptions = {}): Promise<HotelSearchResponse> {
   if (typeof window !== "undefined") {
-    const params = new URLSearchParams();
+    const params = criteria ? searchCriteriaToApiParams(criteria) : new URLSearchParams();
     if (keyword?.trim()) params.set("keyword", keyword.trim());
     if (minPrice !== null && minPrice !== undefined) params.set("minPrice", String(minPrice));
     if (maxPrice !== null && maxPrice !== undefined) params.set("maxPrice", String(maxPrice));

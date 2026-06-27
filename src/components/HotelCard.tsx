@@ -1,3 +1,5 @@
+"use client";
+
 import FavoriteButton from "@/components/FavoriteButton";
 import HotelImage from "@/components/HotelImage";
 import RakutenBookingButton from "@/components/RakutenBookingButton";
@@ -9,6 +11,7 @@ import {
 } from "@/lib/price";
 import type { Hotel } from "@/types/hotel";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type HotelCardProps = {
   hotel: Hotel;
@@ -41,6 +44,8 @@ function getAmenityTags(hotel: Hotel): string[] {
 }
 
 export default function HotelCard({ hotel, checkIn, checkOut, adults }: HotelCardProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const sortedOffers = sortOffersByPrice(hotel.offers);
   const lowestOffer = getLowestValidOffer(sortedOffers);
   const primaryOffer = lowestOffer ?? sortedOffers[0];
@@ -51,7 +56,9 @@ export default function HotelCard({ hotel, checkIn, checkOut, adults }: HotelCar
   const noPriceMessage = primaryOffer?.isDateSpecific
     ? "指定条件の料金は取得できませんでした"
     : "実際の料金は楽天トラベルで確認";
-  const detailHref = `/hotels/${hotel.id}`;
+  const currentQuery = searchParams.toString();
+  const returnTo = `${pathname}${currentQuery ? `?${currentQuery}` : ""}`;
+  const detailHref = `/hotels/${hotel.id}?returnTo=${encodeURIComponent(returnTo)}`;
   const amenityTags = getAmenityTags(hotel);
   const visibleTags = amenityTags.slice(0, 4);
   const hiddenTagCount = Math.max(0, amenityTags.length - visibleTags.length);

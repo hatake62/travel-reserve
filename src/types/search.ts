@@ -1,6 +1,11 @@
 import type { RakutenAreaCandidate } from "@/types/rakutenArea";
 
 export type SortBy = "recommended" | "priceAsc" | "priceDesc" | "ratingDesc";
+export type SearchCriteriaSort =
+  | "recommended"
+  | "price_asc"
+  | "price_desc"
+  | "rating_desc";
 
 export type BookingSite =
   | ""
@@ -42,8 +47,28 @@ export type SearchCondition = {
   rakutenAreaCandidate?: RakutenAreaCandidate;
 };
 
+export type SearchCriteria = {
+  destination?: string;
+  area?: {
+    largeClassCode?: string;
+    middleClassCode?: string;
+    smallClassCode?: string;
+    detailClassCode?: string;
+    label?: string;
+  };
+  minPrice?: number;
+  maxPrice?: number;
+  minUserRating?: number;
+  minHotelClass?: number;
+  amenities?: Amenity[];
+  page: number;
+  limit: number;
+  sort?: SearchCriteriaSort;
+};
+
 export type HotelSearchParams = {
   keyword?: string;
+  criteria?: SearchCriteria;
   checkIn?: string;
   checkOut?: string;
   guests?: number;
@@ -53,12 +78,14 @@ export type HotelSearchParams = {
   minHotelClass?: number | null;
   amenities?: Amenity[];
   rakutenAreaCandidate?: RakutenAreaCandidate;
+  largeClassCode?: string;
   areaClassCode?: string;
   middleClassCode?: string;
   smallClassCode?: string;
   detailClassCode?: string;
   page?: number;
   limit?: number;
+  sort?: SearchCriteriaSort;
 };
 
 export type HotelProviderDebugInfo = {
@@ -70,4 +97,6 @@ export type HotelProviderDebugInfo = {
   firstRawHotelKeys?: string[];
   firstRawHotelHotelKeys?: string[];
   detectedPattern?: string;
+  apiRequestParamsSafe?: Record<string, string>;
+  appliedApiFilters?: string[];
 };

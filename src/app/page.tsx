@@ -15,11 +15,12 @@ import { fetchHotels, HotelApiError, type HotelSearchPagination } from "@/lib/ho
 import { getLowestValidPrice } from "@/lib/price";
 import {
   DEFAULT_SEARCH_CONDITION,
+  searchConditionToCriteria,
   searchConditionToParams,
   searchParamsToCondition,
 } from "@/lib/searchParams";
 import type { Hotel } from "@/types/hotel";
-import type { SearchCondition, SortBy } from "@/types/search";
+import type { SearchCondition } from "@/types/search";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Suspense,
@@ -58,12 +59,13 @@ function HomeContent() {
   const [error, setError] = useState<PageError | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<SortBy>("recommended");
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     urlCondition,
   );
   const requestIdRef = useRef(0);
   const pendingSearchRef = useRef<SearchCondition | null>(null);
+  const restoredScrollRef = useRef(false);
+  const scrollSaveTimerRef = useRef<number | null>(null);
 
   const loadHotels = useCallback(async (condition: SearchCondition) => {
     const requestId = ++requestIdRef.current;
@@ -73,15 +75,9 @@ function HomeContent() {
     setNoticeMessage(null);
 
     try {
+      const criteria = searchConditionToCriteria(condition);
       const data = await fetchHotels({
-        keyword: condition.destination,
-        minPrice: condition.minPrice,
-        maxPrice: condition.maxPrice,
-        minUserRating: condition.minUserRating,
-        minHotelClass: condition.minHotelClass,
-        amenities: condition.amenities,
-        page: condition.page,
-        rakutenAreaCandidate: condition.rakutenAreaCandidate,
+        criteria,
         onNotice: (message) => {
           if (requestId === requestIdRef.current) setNoticeMessage(message);
         },
@@ -107,6 +103,54 @@ function HomeContent() {
       if (requestId === requestIdRef.current) setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const url = `${pathname}${serializedSearchParams ? `?${serializedSearchParams}` : ""}`;
+    const save = () => {
+      sessionStorage.setItem(
+        "lastHotelSearch",
+        JSON.stringify({
+          url,
+          criteria: searchConditionToCriteria(searchCondition),
+          scrollY: window.scrollY,
+          savedAt: new Date().toISOString(),
+        }),
+      );
+    };
+    save();
+    const handlePageHide = () => save();
+    const handleScroll = () => {
+      if (scrollSaveTimerRef.current !== null) {
+        window.clearTimeout(scrollSaveTimerRef.current);
+      }
+      scrollSaveTimerRef.current = window.setTimeout(save, 200);
+    };
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("scroll", handleScroll);
+      if (scrollSaveTimerRef.current !== null) {
+        window.clearTimeout(scrollSaveTimerRef.current);
+      }
+    };
+  }, [pathname, searchCondition, serializedSearchParams]);
+
+  useEffect(() => {
+    if (isLoading || restoredScrollRef.current) return;
+    const currentUrl = `${pathname}${serializedSearchParams ? `?${serializedSearchParams}` : ""}`;
+    const saved = sessionStorage.getItem("lastHotelSearch");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as { url?: string; scrollY?: number };
+      if (parsed.url === currentUrl && typeof parsed.scrollY === "number") {
+        restoredScrollRef.current = true;
+        window.requestAnimationFrame(() => window.scrollTo({ top: parsed.scrollY }));
+      }
+    } catch {
+      // Ignore malformed session storage written by older versions.
+    }
+  }, [isLoading, pathname, serializedSearchParams]);
 
   useEffect(() => {
     const pendingCondition = pendingSearchRef.current;
@@ -163,19 +207,19 @@ function HomeContent() {
 
   const filteredHotels = useMemo(() => {
     return [...hotels].sort((a, b) => {
-      if (sortBy === "ratingDesc") {
+      if (searchCondition.sortBy === "ratingDesc") {
         return (b.rating ?? 0) - (a.rating ?? 0);
       }
-      if (sortBy === "priceAsc" || sortBy === "priceDesc") {
+      if (searchCondition.sortBy === "priceAsc" || searchCondition.sortBy === "priceDesc") {
         const priceA = getLowestValidPrice(a.offers);
         const priceB = getLowestValidPrice(b.offers);
         if (priceA === undefined) return priceB === undefined ? 0 : 1;
         if (priceB === undefined) return -1;
-        return sortBy === "priceAsc" ? priceA - priceB : priceB - priceA;
+        return searchCondition.sortBy === "priceAsc" ? priceA - priceB : priceB - priceA;
       }
       return 0;
     });
-  }, [hotels, sortBy]);
+  }, [hotels, searchCondition.sortBy]);
 
   return (
     <LayoutShell>
@@ -226,9 +270,11 @@ function HomeContent() {
               <SearchSummary
                 condition={searchCondition}
                 displayedCount={filteredHotels.length}
-                onSortChange={setSortBy}
+                onSortChange={(nextSortBy) => {
+                  applyCondition({ ...searchCondition, sortBy: nextSortBy });
+                }}
                 pagination={pagination}
-                sortBy={sortBy}
+                sortBy={searchCondition.sortBy}
                 warning={noticeMessage}
               />
 

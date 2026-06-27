@@ -77,6 +77,20 @@ type ExtractedHotelBasicInfo = {
   pattern: string;
 };
 
+const SAFE_RAKUTEN_PARAM_EXCLUDE = new Set([
+  "applicationId",
+  "accessKey",
+  "affiliateId",
+]);
+
+function getSafeRakutenParams(params: URLSearchParams): Record<string, string> {
+  const safeParams: Record<string, string> = {};
+  params.forEach((value, key) => {
+    if (!SAFE_RAKUTEN_PARAM_EXCLUDE.has(key)) safeParams[key] = value;
+  });
+  return safeParams;
+}
+
 function parseRakutenResponse(body: string): RakutenHotelResponse | null {
   if (!body) return null;
   try {
@@ -561,6 +575,7 @@ async function fetchRakutenHotelPages(
   endpoint: string,
   params: URLSearchParams,
   mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
+  diagnostics: Partial<HotelProviderDebugInfo> = {},
 ): Promise<RakutenHotelFetchResult> {
   const pages = await Promise.all(
     Array.from({ length: RAKUTEN_LIST_PAGE_COUNT }, async (_, index) => {
@@ -584,6 +599,7 @@ async function fetchRakutenHotelPages(
         firstRawHotelKeys: firstDebug?.firstRawHotelKeys,
         firstRawHotelHotelKeys: firstDebug?.firstRawHotelHotelKeys,
         detectedPattern: firstDebug?.detectedPattern,
+        ...diagnostics,
       },
     ),
   };
@@ -591,19 +607,57 @@ async function fetchRakutenHotelPages(
 
 export async function getRakutenHotelsByKeyword({
   keyword,
-}: { keyword?: string } = {}): Promise<Hotel[]> {
+}: RakutenVacantHotelParams = {}): Promise<Hotel[]> {
   return (await getRakutenHotelsByKeywordWithDebug({ keyword })).hotels;
 }
 
 export async function getRakutenHotelsByKeywordWithDebug({
   keyword,
-}: { keyword?: string } = {}): Promise<RakutenHotelFetchResult> {
+  minPrice,
+  maxPrice,
+  sort,
+  rakutenAreaCandidate,
+  areaClassCode,
+  largeClassCode,
+  middleClassCode,
+  smallClassCode,
+  detailClassCode,
+}: RakutenVacantHotelParams = {}): Promise<RakutenHotelFetchResult> {
   const params = createRakutenParams(getRakutenCredentials());
   params.set("keyword", keyword?.trim() || DEFAULT_KEYWORD);
   params.set("hits", String(RAKUTEN_LIST_HITS));
-  params.set("sort", "standard");
+  params.set(
+    "sort",
+    sort === "price_asc" ? "+roomCharge" : sort === "price_desc" ? "-roomCharge" : "standard",
+  );
+  const appliedApiFilters = ["keyword"];
+  const area = rakutenAreaCandidate;
+  const resolvedLargeClassCode =
+    area?.areaClassCode ?? areaClassCode ?? largeClassCode;
+  const resolvedMiddleClassCode = area?.middleClassCode ?? middleClassCode;
+  const resolvedSmallClassCode = area?.smallClassCode ?? smallClassCode;
+  const resolvedDetailClassCode = area?.detailClassCode ?? detailClassCode;
+  if (resolvedLargeClassCode) {
+    params.set("largeClassCode", resolvedLargeClassCode);
+    appliedApiFilters.push("area");
+  }
+  if (resolvedMiddleClassCode) params.set("middleClassCode", resolvedMiddleClassCode);
+  if (resolvedSmallClassCode) params.set("smallClassCode", resolvedSmallClassCode);
+  if (resolvedDetailClassCode) params.set("detailClassCode", resolvedDetailClassCode);
+  if (minPrice !== undefined && minPrice !== null) {
+    params.set("minCharge", String(minPrice));
+    appliedApiFilters.push("minPrice");
+  }
+  if (maxPrice !== undefined && maxPrice !== null) {
+    params.set("maxCharge", String(maxPrice));
+    appliedApiFilters.push("maxPrice");
+  }
+  if (sort && sort !== "recommended") appliedApiFilters.push("sort");
 
-  return fetchRakutenHotelPages(KEYWORD_SEARCH_ENDPOINT, params);
+  return fetchRakutenHotelPages(KEYWORD_SEARCH_ENDPOINT, params, mapRakutenKeywordHotelToHotel, {
+    apiRequestParamsSafe: getSafeRakutenParams(params),
+    appliedApiFilters,
+  });
 }
 
 function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
@@ -636,12 +690,12 @@ export async function getRakutenVacantHotelsWithDebug(
   const { keyword, checkIn, checkOut, guests } = options;
 
   if (!checkIn || !checkOut || !guests) {
-    return getRakutenHotelsByKeywordWithDebug({ keyword });
+    return getRakutenHotelsByKeywordWithDebug(options);
   }
 
   // VacantHotelSearch does not accept a free-text keyword as its location.
   if (!hasVacantSearchArea(options)) {
-    return getRakutenHotelsByKeywordWithDebug({ keyword });
+    return getRakutenHotelsByKeywordWithDebug(options);
   }
 
   const params = createRakutenParams(getRakutenCredentials());
@@ -658,6 +712,7 @@ export async function getRakutenVacantHotelsWithDebug(
   params.set("responseType", "large");
 
   if (options.hotelNo) params.set("hotelNo", String(options.hotelNo));
+  const appliedApiFilters = ["area"];
   const largeClassCode =
     area?.areaClassCode ?? options.areaClassCode ?? options.largeClassCode;
   const middleClassCode = area?.middleClassCode ?? options.middleClassCode;
@@ -665,6 +720,15 @@ export async function getRakutenVacantHotelsWithDebug(
   if (largeClassCode) params.set("largeClassCode", largeClassCode);
   if (middleClassCode) params.set("middleClassCode", middleClassCode);
   if (smallClassCode) params.set("smallClassCode", smallClassCode);
+  if (options.detailClassCode) params.set("detailClassCode", options.detailClassCode);
+  if (options.minPrice !== undefined && options.minPrice !== null) {
+    params.set("minCharge", String(options.minPrice));
+    appliedApiFilters.push("minPrice");
+  }
+  if (options.maxPrice !== undefined && options.maxPrice !== null) {
+    params.set("maxCharge", String(options.maxPrice));
+    appliedApiFilters.push("maxPrice");
+  }
   if (options.latitude !== undefined) params.set("latitude", String(options.latitude));
   if (options.longitude !== undefined) params.set("longitude", String(options.longitude));
   if (options.searchRadius !== undefined) {
@@ -676,9 +740,13 @@ export async function getRakutenVacantHotelsWithDebug(
       VACANT_HOTEL_SEARCH_ENDPOINT,
       searchParams,
       mapRakutenVacantHotelToHotel,
+      {
+        apiRequestParamsSafe: getSafeRakutenParams(searchParams),
+        appliedApiFilters,
+      },
     );
   const fallBackToKeyword = async (): Promise<RakutenHotelFetchResult> => {
-    const keywordResult = await getRakutenHotelsByKeywordWithDebug({ keyword });
+    const keywordResult = await getRakutenHotelsByKeywordWithDebug(options);
     return {
       ...keywordResult,
       debug: {

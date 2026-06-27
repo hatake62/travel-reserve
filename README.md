@@ -842,10 +842,17 @@ http://localhost:3000/?destination=東京&minPrice=5000&maxPrice=20000&minUserRa
 
 トップ画面はホテル候補を探すための画面です。宿泊日や人数を指定した価格確認は、ホテル詳細ページまたはお気に入りページから価格追跡を開始するときに行います。
 
+- トップ画面ではURLクエリとフォーム入力をまず `SearchCriteria` に変換してからホテル検索します。
+- 地区コード、キーワード、参考価格条件、並び順など楽天APIに渡せる条件はProvider内で楽天APIパラメータへ変換します。
+- 利用者評価、ホテルクラス、設備条件など楽天APIで完全に扱えない条件は、Hotel型へ変換・名寄せした後の補助filterとして扱います。
+- 補助filterはページング前に適用し、`pagination.total`、`totalPages`、`hasNext`、`hasPrev` はfilter後の件数から計算します。
 - トップ画面のURLクエリは `destination`、`minPrice`、`maxPrice`、`minUserRating`、`minHotelClass`、`amenities`、`page` を使います。
 - トップ画面から食事条件は外しています。既存URLに `checkIn`、`checkOut`、`guests`、`mealPlan` が含まれていても、トップ画面では無視します。
 - トップ画面の価格は `hotelMinCharge` 由来の参考最安値です。指定日の価格としては扱いません。
 - 設備条件は楽天APIから取得できるホテル名、施設特色、アクセス、住所、駐車場情報などのテキストに基づく推定です。楽天APIから直接判定できない設備は厳密検索しません。
+- 設備条件は `amenityText` から推定し、判定不能なホテルは残します。設備filterで全件除外になりそうな場合は、過剰除外を避けるため設備filterを緩めます。
+- 詳細ページへのリンクには `returnTo` として検索結果URLを渡します。詳細ページの「検索結果へ戻る」は、前回の `destination`、価格、評価、ホテルクラス、設備条件、ページ番号を含むURLへ戻ります。
+- トップ画面ではURLクエリを検索状態の正とし、ブラウザバック時もURLから検索条件を復元します。補助的に `sessionStorage.lastHotelSearch` へURL、SearchCriteria、スクロール位置、保存時刻を保存します。
 - 指定日の最安値は、お気に入りホテルまたは価格追跡中ホテルでのみ表示し、楽天トラベル空室検索APIの `dailyCharge.total` の最小値を使います。
 - 価格追跡を開始するときに、チェックイン日、チェックアウト日、大人人数、食事条件、価格条件、設備条件を入力します。
 - 食事条件は価格追跡開始時に指定し、楽天トラベル空室検索APIの `squeezeCondition` へ `breakfast`、`dinner` として渡します。

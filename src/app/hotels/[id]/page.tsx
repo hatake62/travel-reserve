@@ -19,6 +19,7 @@ import { use, useCallback, useEffect, useState } from "react";
 
 type HotelDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ returnTo?: string }>;
 };
 
 type PageError = {
@@ -29,8 +30,14 @@ type PageError = {
 
 export default function HotelDetailPage({
   params,
+  searchParams,
 }: HotelDetailPageProps) {
   const { id } = use(params);
+  const resolvedSearchParams = searchParams ? use(searchParams) : {};
+  const rawReturnTo = resolvedSearchParams.returnTo ?? "";
+  const returnTo = rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//")
+    ? rawReturnTo
+    : "/";
   const [hotel, setHotel] = useState<Hotel | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<PageError | null>(null);
@@ -142,10 +149,10 @@ export default function HotelDetailPage({
         <div className="mx-auto max-w-6xl">
         <Link
           className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-blue-600 transition hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
-          href="/"
+          href={returnTo}
         >
           <span aria-hidden="true">←</span>
-          ホテル一覧へ戻る
+          {rawReturnTo ? "検索結果へ戻る" : "トップページへ戻る"}
         </Link>
 
         <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

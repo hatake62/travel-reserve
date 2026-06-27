@@ -1,94 +1,76 @@
-import { getHotelProvider } from "@/lib/hotelProviders";
-import { NextResponse } from "next/server";
 import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
 import { applyHotelDiscoveryFilters } from "@/lib/hotelDiscoveryFilters";
-import { AMENITY_OPTIONS } from "@/lib/searchParams";
-import type { Amenity } from "@/types/search";
+import { getHotelProvider } from "@/lib/hotelProviders";
+import { getLowestValidPrice } from "@/lib/price";
+import { searchParamsToCriteria } from "@/lib/searchParams";
+import type { Hotel } from "@/types/hotel";
+import type { SearchCriteriaSort } from "@/types/search";
+import { NextResponse } from "next/server";
 
 const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = 0;
-const DEFAULT_PAGE_SIZE = 10;
-const MAX_PAGE_SIZE = 30;
 
-function parsePositiveInteger(value: string | null, defaultValue: number, max?: number): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) return defaultValue;
-  return max ? Math.min(parsed, max) : parsed;
-}
-
-function parseNullableNumber(value: string | null): number | null {
-  if (value === null || value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function parseAmenities(value: string | null): Amenity[] {
-  const amenityValues = new Set(AMENITY_OPTIONS.map((option) => option.value));
-  return (value ?? "")
-    .split(",")
-    .map((amenity) => amenity.trim())
-    .filter((amenity): amenity is Amenity => amenityValues.has(amenity as Amenity));
+function sortHotels(hotels: Hotel[], sort: SearchCriteriaSort | undefined): Hotel[] {
+  return [...hotels].sort((a, b) => {
+    if (sort === "rating_desc") return (b.rating ?? 0) - (a.rating ?? 0);
+    if (sort === "price_asc" || sort === "price_desc") {
+      const priceA = getLowestValidPrice(a.offers);
+      const priceB = getLowestValidPrice(b.offers);
+      if (priceA === undefined) return priceB === undefined ? 0 : 1;
+      if (priceB === undefined) return -1;
+      return sort === "price_asc" ? priceA - priceB : priceB - priceA;
+    }
+    return 0;
+  });
 }
 
 export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
-    const keyword = params.get("keyword") ?? undefined;
-    const mealPlanIgnoredOnSearch = params.has("mealPlan");
-    // Top search is hotel discovery only. Stay dates and guest count are handled
-    // in price tracking flows to avoid per-hotel vacant search API calls.
-    const checkIn = undefined;
-    const checkOut = undefined;
-    const guests = undefined;
-    const areaClassCode = params.get("areaClassCode") ?? undefined;
-    const middleClassCode = params.get("middleClassCode") ?? undefined;
-    const smallClassCode = params.get("smallClassCode") ?? undefined;
-    const requestedDetailClassCode = params.get("detailClassCode") ?? undefined;
-    // GetAreaClassの詳細コードはVacantHotelSearch側で無効になることがある。
-    // 一覧は小分類・中分類までで十分広く検索し、詳細コードは送らない。
-    const detailClassCode = undefined;
-    const page = parsePositiveInteger(params.get("page"), 1);
-    const limit = parsePositiveInteger(params.get("limit"), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const criteria = searchParamsToCriteria(params);
     const debug = params.get("debug") === "true";
-    const minPrice = parseNullableNumber(params.get("minPrice"));
-    const maxPrice = parseNullableNumber(params.get("maxPrice"));
-    const minUserRating = parseNullableNumber(params.get("minUserRating"));
-    const minHotelClass = parseNullableNumber(params.get("minHotelClass"));
-    const amenities = parseAmenities(params.get("amenities"));
-    const providerNotices: string[] = requestedDetailClassCode
-      ? ["詳細地区コードは楽天API互換性のため使用せず、広い地区条件で検索しています。"]
-      : [];
-    if (mealPlanIgnoredOnSearch) {
+    const ignoredTopSearchParams = ["mealPlan", "checkIn", "checkOut", "guests"].filter((key) =>
+      params.has(key),
+    );
+    const providerNotices: string[] = [];
+    if (ignoredTopSearchParams.length > 0) {
       providerNotices.push(
-        "Meal conditions are used when starting price tracking, not on top search results.",
+        `${ignoredTopSearchParams.join(", ")} are used in price tracking or detail flows, not top hotel search results.`,
       );
     }
-    const searchOptions = {
-      keyword,
-      checkIn,
-      checkOut,
-      guests,
-      areaClassCode,
-      middleClassCode,
-      smallClassCode,
-      detailClassCode,
+
+    const result = await getHotelProvider().getHotelsWithDebug?.({
+      criteria,
+      keyword: criteria.destination,
+      largeClassCode: criteria.area?.largeClassCode,
+      areaClassCode: criteria.area?.largeClassCode,
+      middleClassCode: criteria.area?.middleClassCode,
+      smallClassCode: criteria.area?.smallClassCode,
+      detailClassCode: criteria.area?.detailClassCode,
+      minPrice: criteria.minPrice,
+      maxPrice: criteria.maxPrice,
+      sort: criteria.sort,
       onNotice: (notice: string) => providerNotices.push(notice),
-    };
-    const result = await getHotelProvider().getHotelsWithDebug?.(searchOptions);
+    });
     if (!result) throw new Error("ホテルProviderの検索結果を取得できませんでした。");
+
+    const apiFilters = new Set(result.debug.appliedApiFilters ?? []);
     const rawMergedHotels = result.hotels;
     const filtered = applyHotelDiscoveryFilters(rawMergedHotels, {
-      minPrice,
-      maxPrice,
-      minUserRating,
-      minHotelClass,
-      amenities,
+      minPrice: criteria.minPrice,
+      maxPrice: criteria.maxPrice,
+      minUserRating: criteria.minUserRating,
+      minHotelClass: criteria.minHotelClass,
+      amenities: criteria.amenities ?? [],
+      applyPriceFilter:
+        (criteria.minPrice !== undefined && !apiFilters.has("minPrice")) ||
+        (criteria.maxPrice !== undefined && !apiFilters.has("maxPrice")),
     });
-    const hotels = filtered.hotels;
+    const hotels = sortHotels(filtered.hotels, criteria.sort);
     const totalBeforePagination = hotels.length;
-    const totalPages = Math.max(1, Math.ceil(totalBeforePagination / limit));
-    const resolvedPage = Math.min(page, totalPages);
-    const offset = (resolvedPage - 1) * limit;
-    const pageHotels = hotels.slice(offset, offset + limit);
+    const totalPages = Math.max(1, Math.ceil(totalBeforePagination / criteria.limit));
+    const resolvedPage = Math.min(criteria.page, totalPages);
+    const offset = (resolvedPage - 1) * criteria.limit;
+    const pageHotels = hotels.slice(offset, offset + criteria.limit);
     const responseHotels = pageHotels.map((hotel) => ({
       ...hotel,
       offers: hotel.offers.map((offer) => ({
@@ -98,6 +80,29 @@ export async function GET(request: Request) {
         sourcePriceField: offer.sourcePriceField ?? "reference",
       })),
     }));
+    const fallbackWarnings = result.debug.warnings.filter((warning) =>
+      warning.includes("周辺エリア"),
+    );
+    const warnings = [...result.debug.warnings, ...fallbackWarnings, ...providerNotices];
+    const pagination = {
+      page: resolvedPage,
+      limit: criteria.limit,
+      total: totalBeforePagination,
+      totalPages,
+      hasNext: resolvedPage < totalPages,
+      hasPrev: resolvedPage > 1,
+    };
+    const appliedFilters = {
+      api: result.debug.appliedApiFilters ?? [],
+      client: [
+        ...(criteria.minUserRating !== undefined ? ["minUserRating"] : []),
+        ...(criteria.minHotelClass !== undefined ? ["minHotelClass"] : []),
+        ...(criteria.amenities && criteria.amenities.length > 0 ? ["amenities"] : []),
+        ...(criteria.minPrice !== undefined && !apiFilters.has("minPrice") ? ["minPrice"] : []),
+        ...(criteria.maxPrice !== undefined && !apiFilters.has("maxPrice") ? ["maxPrice"] : []),
+      ],
+      ignored: ignoredTopSearchParams,
+    };
     const dateSpecificDebug = {
       dateSpecificPriceEnabled: false,
       dateSpecificPriceHotelLimit: DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
@@ -119,30 +124,24 @@ export async function GET(request: Request) {
       priceExtractionWarnings: [],
       priceSamples: [],
     };
-    const fallbackWarnings = result.debug.warnings.filter((warning) =>
-      warning.includes("周辺エリア"),
-    );
+
     const responseBody = {
       hotels: responseHotels,
-      pagination: {
-        page: resolvedPage,
-        limit,
-        total: totalBeforePagination,
-        totalPages,
-        hasNext: resolvedPage < totalPages,
-        hasPrev: resolvedPage > 1,
-      },
-      warnings: [...fallbackWarnings, ...providerNotices],
+      pagination,
+      warnings,
       ...(debug
         ? {
             debug: {
               ...result.debug,
               ...dateSpecificDebug,
-              keyword: keyword ?? "",
+              searchCriteria: criteria,
+              apiRequestParamsSafe: result.debug.apiRequestParamsSafe ?? {},
+              appliedFilters,
+              keyword: criteria.destination ?? "",
               priceDisplayMode: "reference_on_search",
               dateSpecificPriceEnabled: false,
-              mealPlanIgnoredOnSearch,
-              ...(mealPlanIgnoredOnSearch
+              mealPlanIgnoredOnSearch: ignoredTopSearchParams.includes("mealPlan"),
+              ...(ignoredTopSearchParams.includes("mealPlan")
                 ? {
                     reason:
                       "Meal conditions are used when starting price tracking, not on top search results.",
@@ -150,29 +149,29 @@ export async function GET(request: Request) {
                 : {}),
               ...filtered.debug,
               appPage: resolvedPage,
-              appLimit: limit,
+              appLimit: criteria.limit,
               appOffset: offset,
-              pagination: {
-                page: resolvedPage,
-                limit,
-                total: totalBeforePagination,
-                totalPages,
-                hasNext: resolvedPage < totalPages,
-                hasPrev: resolvedPage > 1,
-              },
+              pagination,
               totalBeforePagination,
               totalAfterMerge: rawMergedHotels.length,
               returnedCount: responseHotels.length,
               totalPages,
               hasNext: resolvedPage < totalPages,
               hasPrev: resolvedPage > 1,
-              areaSearchLevelUsed: smallClassCode ? "smallClassCode" : middleClassCode ? "middleClassCode" : "keyword",
-              ignoredDetailClassCode: Boolean(requestedDetailClassCode),
+              areaSearchLevelUsed: criteria.area?.smallClassCode
+                ? "smallClassCode"
+                : criteria.area?.middleClassCode
+                ? "middleClassCode"
+                : "keyword",
+              ignoredDetailClassCode: false,
               fallbackSteps: fallbackWarnings,
               rawHotelCount: result.debug.rawCount,
+              mappedHotelCount: result.debug.mappedCount,
               mergedHotelCount: rawMergedHotels.length,
+              beforeClientFilterCount: rawMergedHotels.length,
+              afterClientFilterCount: hotels.length,
               displayedHotelCount: responseHotels.length,
-              warnings: [...result.debug.warnings, ...fallbackWarnings, ...providerNotices],
+              warnings,
               dateSpecificPriceCheckedCount: dateSpecificDebug.checkedCount,
               dateSpecificPriceAvailableCount: dateSpecificDebug.pricedHotelCount,
               dateSpecificPriceNotFoundCount: dateSpecificDebug.notFoundCount,
@@ -191,16 +190,16 @@ export async function GET(request: Request) {
     };
     const response = NextResponse.json(responseBody);
     const hasAreaCode = Boolean(
-      areaClassCode || middleClassCode || smallClassCode,
+      criteria.area?.largeClassCode ||
+        criteria.area?.middleClassCode ||
+        criteria.area?.smallClassCode,
     );
     if (providerNotices.length > 0) {
       response.headers.set(
         "X-Hotel-Search-Notice",
         encodeURIComponent(providerNotices.join(" / ")),
       );
-    } else if (
-      !hasAreaCode && process.env.USE_MOCK_HOTELS === "false"
-    ) {
+    } else if (!hasAreaCode && process.env.USE_MOCK_HOTELS === "false") {
       response.headers.set(
         "X-Hotel-Search-Notice",
         encodeURIComponent(
