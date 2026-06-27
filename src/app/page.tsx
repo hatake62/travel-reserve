@@ -10,7 +10,6 @@ import Pagination from "@/components/Pagination";
 import SearchForm from "@/components/SearchForm";
 import SearchSummary from "@/components/SearchSummary";
 import { fetchHotels, HotelApiError, type HotelSearchPagination } from "@/lib/hotelApi";
-import { getLowestValidPrice } from "@/lib/price";
 import {
   DEFAULT_SEARCH_CONDITION,
   searchConditionToParams,
@@ -72,6 +71,11 @@ function HomeContent() {
     try {
       const data = await fetchHotels({
         keyword: condition.destination,
+        minPrice: condition.minPrice,
+        maxPrice: condition.maxPrice,
+        minUserRating: condition.minUserRating,
+        minHotelClass: condition.minHotelClass,
+        amenities: condition.amenities,
         page: condition.page,
         rakutenAreaCandidate: condition.rakutenAreaCandidate,
         onNotice: (message) => {
@@ -153,61 +157,7 @@ function HomeContent() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // 地区コード検索はサーバー側で絞り込み済み。displayName（階層表記）を
-  // ホテル住所へ再度部分一致させると、正しい結果まで除外してしまう。
-  const destination = searchCondition.rakutenAreaCandidate
-    ? ""
-    : searchCondition.destination.trim().toLocaleLowerCase("ja");
-  const filteredHotels = hotels
-    .filter((hotel) => {
-      const matchesDestination =
-        !destination ||
-        hotel.name.toLocaleLowerCase("ja").includes(destination) ||
-        hotel.area.toLocaleLowerCase("ja").includes(destination);
-      const lowestPrice = getLowestValidPrice(hotel.offers);
-      const matchesMinPrice =
-        searchCondition.minPrice === null ||
-        (lowestPrice !== undefined && lowestPrice >= searchCondition.minPrice);
-      const matchesMaxPrice =
-        searchCondition.maxPrice === null ||
-        (lowestPrice !== undefined && lowestPrice <= searchCondition.maxPrice);
-      const matchesSite =
-        !searchCondition.site ||
-        hotel.offers.some((offer) => offer.site === searchCondition.site);
-      const matchesBreakfast =
-        !searchCondition.breakfastOnly ||
-        hotel.offers.some((offer) => offer.hasBreakfast);
-
-      return (
-        matchesDestination &&
-        matchesMinPrice &&
-        matchesMaxPrice &&
-        matchesSite &&
-        matchesBreakfast
-      );
-    })
-    .sort((a, b) => {
-      if (searchCondition.sortBy === "ratingDesc") {
-        return b.rating - a.rating;
-      }
-
-      if (
-        searchCondition.sortBy === "priceAsc" ||
-        searchCondition.sortBy === "priceDesc"
-      ) {
-        const priceA = getLowestValidPrice(a.offers);
-        const priceB = getLowestValidPrice(b.offers);
-
-        if (priceA === undefined) return priceB === undefined ? 0 : 1;
-        if (priceB === undefined) return -1;
-
-        return searchCondition.sortBy === "priceAsc"
-          ? priceA - priceB
-          : priceB - priceA;
-      }
-
-      return 0;
-    });
+  const filteredHotels = hotels;
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 sm:px-6 sm:py-8">
@@ -221,7 +171,7 @@ function HomeContent() {
               ホテルを探して、気になる宿の価格推移を追跡。
             </h1>
             <p className="mt-2 max-w-2xl text-base leading-7 text-slate-600">
-              検索一覧では候補を広く確認し、お気に入りホテルの宿泊料金を毎日記録できます。
+              ホテルを探してお気に入りに追加すると、宿泊日の価格推移を追跡できます。
             </p>
           </div>
           <Link
@@ -271,7 +221,7 @@ function HomeContent() {
               ) : (
                 <EmptyState
                   actionLabel="条件をリセット"
-                  message="価格条件や食事条件をゆるめて再検索してください。"
+                  message="設備条件をゆるめてください。価格帯や評価条件も見直せます。"
                   onAction={handleReset}
                 />
               )}
@@ -293,7 +243,7 @@ function HomeContent() {
         </section>
         <footer className="mt-12 border-t border-slate-200 pt-6">
           <p className="text-sm leading-6 text-slate-600">
-            表示価格や空室状況は取得タイミングにより変動する場合があります。実際の予約条件は各予約サイトで確認してください。
+            トップ画面では参考最安値を表示しています。指定日の価格推移はお気に入り追加後に確認できます。実際の料金・設備・食事条件は楽天トラベルで確認してください。
           </p>
         </footer>
       </div>

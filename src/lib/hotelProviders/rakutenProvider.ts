@@ -32,11 +32,15 @@ type RakutenHotelBasicInfo = {
   hotelThumbnailUrl?: string | null;
   reviewAverage?: number | string | null;
   hotelSpecial?: string | null;
+  hotelDescription?: string | null;
+  access?: string | null;
+  parkingInformation?: string | null;
+  nearestStation?: string | null;
 };
 
 type RakutenHotelEntry = {
   hotelBasicInfo?: RakutenHotelBasicInfo;
-  hotelDetailInfo?: { areaName?: string | null };
+  hotelDetailInfo?: { areaName?: string | null; hotelClassCode?: string | number | null };
   roomInfo?: Array<{
     roomBasicInfo?: {
       roomName?: string | null;
@@ -86,6 +90,11 @@ function toFiniteNumber(value: number | string | null | undefined): number {
   return typeof number === "number" && Number.isFinite(number) ? number : 0;
 }
 
+function toNullableFiniteNumber(value: number | string | null | undefined): number | null {
+  const number = typeof value === "string" ? Number(value) : value;
+  return typeof number === "number" && Number.isFinite(number) ? number : null;
+}
+
 export type RakutenVacantHotelParams = HotelSearchParams & {
   hotelNo?: string | number;
   largeClassCode?: string;
@@ -106,13 +115,40 @@ export function mapRakutenKeywordHotelToHotel(
   const address = `${basicInfo.address1 ?? ""}${basicInfo.address2 ?? ""}`.trim();
   const bookingUrl =
     basicInfo.hotelInformationUrl || basicInfo.planListUrl || "";
+  const amenityText = [
+    basicInfo.hotelName,
+    basicInfo.hotelSpecial,
+    basicInfo.hotelDescription,
+    basicInfo.access,
+    basicInfo.parkingInformation,
+    basicInfo.nearestStation,
+    address,
+  ].filter(Boolean).join(" ");
 
   return {
     id: `rakuten-${basicInfo.hotelNo}`,
     providerIds: { rakuten: String(basicInfo.hotelNo) },
     name: basicInfo.hotelName,
     area: address || entry.hotelDetailInfo?.areaName || "エリア情報なし",
-    rating: toFiniteNumber(basicInfo.reviewAverage),
+    rating: toNullableFiniteNumber(basicInfo.reviewAverage),
+    hotelClass: null,
+    amenities: [],
+    amenityText,
+    access: basicInfo.access ?? undefined,
+    description: basicInfo.hotelSpecial ?? basicInfo.hotelDescription ?? undefined,
+    sourceFields: {
+      rating: "hotelBasicInfo.reviewAverage",
+      amenities: [
+        "hotelBasicInfo.hotelName",
+        "hotelBasicInfo.hotelSpecial",
+        "hotelBasicInfo.hotelDescription",
+        "hotelBasicInfo.access",
+        "hotelBasicInfo.parkingInformation",
+        "hotelBasicInfo.nearestStation",
+        "hotelBasicInfo.address1",
+        "hotelBasicInfo.address2",
+      ],
+    },
     imageUrl:
       basicInfo.hotelImageUrl || basicInfo.hotelThumbnailUrl || "",
     offers: [

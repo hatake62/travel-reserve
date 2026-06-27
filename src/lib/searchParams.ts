@@ -1,4 +1,4 @@
-import type { BookingSite, MealPlan, SearchCondition, SortBy } from "@/types/search";
+import type { Amenity, BookingSite, MealPlan, SearchCondition, SortBy } from "@/types/search";
 
 export const DEFAULT_SEARCH_CONDITION: SearchCondition = {
   destination: "",
@@ -9,6 +9,9 @@ export const DEFAULT_SEARCH_CONDITION: SearchCondition = {
   mealPlan: "",
   minPrice: null,
   maxPrice: null,
+  minUserRating: null,
+  minHotelClass: null,
+  amenities: [],
   features: [],
   site: "",
   breakfastOnly: false,
@@ -30,7 +33,21 @@ const SITE_VALUES: BookingSite[] = [
   "一休.com",
 ];
 
-const MEAL_PLAN_VALUES: MealPlan[] = ["", "breakfast", "dinnerBreakfast"];
+export const AMENITY_OPTIONS: Array<{ value: Amenity; label: string }> = [
+  { value: "onsen", label: "温泉" },
+  { value: "largeBath", label: "大浴場" },
+  { value: "parking", label: "駐車場" },
+  { value: "internet", label: "インターネット利用可" },
+  { value: "nonSmoking", label: "禁煙ルーム" },
+  { value: "petFriendly", label: "ペット可" },
+  { value: "stationNear", label: "駅近" },
+  { value: "sauna", label: "サウナ" },
+  { value: "pool", label: "プール" },
+  { value: "fitness", label: "フィットネス" },
+];
+
+const MEAL_PLAN_VALUES: MealPlan[] = ["", "breakfast", "dinner", "dinnerBreakfast"];
+const AMENITY_VALUES = AMENITY_OPTIONS.map((option) => option.value);
 
 function isSortBy(value: string): value is SortBy {
   return SORT_VALUES.some((sortBy) => sortBy === value);
@@ -44,6 +61,10 @@ function isMealPlan(value: string): value is MealPlan {
   return MEAL_PLAN_VALUES.some((mealPlan) => mealPlan === value);
 }
 
+function isAmenity(value: string): value is Amenity {
+  return AMENITY_VALUES.some((amenity) => amenity === value);
+}
+
 function parseMaxPrice(value: string | null): number | null {
   if (value === null || value.trim() === "") return null;
   const maxPrice = Number(value);
@@ -54,6 +75,18 @@ function parsePrice(value: string | null): number | null {
   if (value === null || value.trim() === "") return null;
   const price = Number(value);
   return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
+function parseRating(value: string | null): number | null {
+  if (value === null || value.trim() === "") return null;
+  const rating = Number(value);
+  return [3, 3.5, 4, 4.5].includes(rating) ? rating : null;
+}
+
+function parseHotelClass(value: string | null): number | null {
+  if (value === null || value.trim() === "") return null;
+  const hotelClass = Number(value);
+  return [3, 4, 5].includes(hotelClass) ? hotelClass : null;
 }
 
 function parsePage(value: string | null): number {
@@ -69,19 +102,19 @@ export function searchConditionToParams(
   if (condition.destination.trim()) {
     params.set("destination", condition.destination.trim());
   }
-  if (condition.sortBy !== DEFAULT_SEARCH_CONDITION.sortBy) {
-    params.set("sortBy", condition.sortBy);
-  }
-  if (condition.mealPlan) params.set("mealPlan", condition.mealPlan);
   if (condition.minPrice !== null) {
     params.set("minPrice", String(condition.minPrice));
   }
   if (condition.maxPrice !== null) {
     params.set("maxPrice", String(condition.maxPrice));
   }
-  if (condition.features.length > 0) params.set("features", condition.features.join(","));
-  if (condition.site) params.set("site", condition.site);
-  if (condition.breakfastOnly) params.set("breakfastOnly", "true");
+  if (condition.minUserRating !== null) {
+    params.set("minUserRating", String(condition.minUserRating));
+  }
+  if (condition.minHotelClass !== null) {
+    params.set("minHotelClass", String(condition.minHotelClass));
+  }
+  if (condition.amenities.length > 0) params.set("amenities", condition.amenities.join(","));
   if (condition.page > 1) params.set("page", String(condition.page));
 
   const area = condition.rakutenAreaCandidate;
@@ -129,6 +162,12 @@ export function searchParamsToCondition(
     mealPlan: isMealPlan(mealPlan) ? mealPlan : DEFAULT_SEARCH_CONDITION.mealPlan,
     minPrice: parsePrice(params.get("minPrice")),
     maxPrice: parseMaxPrice(params.get("maxPrice")),
+    minUserRating: parseRating(params.get("minUserRating")),
+    minHotelClass: parseHotelClass(params.get("minHotelClass")),
+    amenities: (params.get("amenities") ?? "")
+      .split(",")
+      .map((amenity) => amenity.trim())
+      .filter(isAmenity),
     features: (params.get("features") ?? "")
       .split(",")
       .map((feature) => feature.trim())

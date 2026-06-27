@@ -613,25 +613,22 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 - 同じホテル、宿泊日、チェックアウト日、人数、取得日のスナップショットはupsertし、同日に再取得すると最新の指定日価格で上書きします。
 - 実際の料金、空室、キャンセル条件、予約条件は楽天トラベル側で確認してください。
 
-指定日価格のデバッグ:
+トップ検索のデバッグ:
 
 ```text
-/api/hotels?keyword=東京&checkIn=2026-07-25&checkOut=2026-07-26&guests=2&debug=true
+/api/hotels?keyword=東京&minUserRating=4.0&minHotelClass=3&amenities=onsen,parking,internet&debug=true
 ```
 
-`debug=true` では、`dateSpecificPriceEnabled`、`dateSpecificPriceHotelLimit`、`pricedHotelCount`、`notFoundCount`、`priceSourceField`、最大5件の `priceSamples` を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
-
-指定日価格の各`priceSamples`には、空室検索の試行状況も含まれます。`searchPatternsTried`が空、または`pagesFetched=0`の場合は、施設番号が不正などAPI呼び出し前の理由を確認します。`attemptedRequests`には検索パターン、ページ、結果、HTTPステータスの安全な概要が入り、URLや認証情報は含みません。
+`debug=true` では、`priceDisplayMode`、`dateSpecificPriceEnabled`、`mealPlanIgnoredOnSearch`、`minUserRating`、`minHotelClass`、`amenities`、`ratingFilterApplied`、`ratingMissingCount`、`hotelClassFilterApplied`、`hotelClassUnavailable`、`amenityFilterApplied`、`amenityMatchedCount`、`amenityMissingCount`、`rawHotelCount`、`mergedHotelCount`、`displayedHotelCount`、`warnings` を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
 
 - `api_data_not_found`: APIは呼び出したが、指定条件の空室・料金を返さなかった状態です。
 - `no_daily_charge_in_response`: APIレスポンスはあったが、料金フィールドを抽出できなかった状態です。
 - `invalid_hotel_id`: 楽天施設番号を取り出せなかった状態です。
 - `error`: HTTPエラーやレート制限など、取得処理が完了しなかった状態です。
-- `not_checked`: 一覧の補完対象外としてAPIを呼ばなかった状態です。
 
 ## ホテル検索のページング
 
-ホテル一覧はアプリ側で10件ずつ表示し、「前へ」「次へ」でページを移動できます。`page=2` 以降はURLクエリに保持されるため、更新や共有したURLでも同じページを開けます。検索条件、並び替え、フィルターを変更した場合は1ページ目に戻ります。
+ホテル一覧はアプリ側で10件ずつ表示し、「前へ」「次へ」でページを移動できます。`page=2` 以降はURLクエリに保持されるため、更新や共有したURLでも同じページを開けます。検索条件やフィルターを変更した場合は1ページ目に戻ります。
 
 `/api/hotels` は `page` と `limit` を受け取ります。`page` の既定値は1、`limit` の既定値は10、上限は30です。通常レスポンスは次の形式です。
 
@@ -652,17 +649,17 @@ curl -X GET https://travel-reserve.vercel.app/api/cron/capture-price-snapshots \
 
 楽天APIからは一覧候補として最大2ページ×30件を取得し、名寄せ後にアプリ側でページ分割します。楽天APIの`page`は候補を多く集めるためのページであり、アプリの`page`は画面に表示する10件単位のページです。
 
-宿泊日・人数を指定した一覧検索では、ホテル候補を広く得るため`searchPattern=0`を使います。指定日の最安値を補完する個別検索だけは`searchPattern=1`を使い、現在表示中のページのホテルを対象にします。取得できなかったホテルは一覧から除外せず、「指定条件の料金未取得」または予約サイトでの確認対象として表示します。
+トップ検索では宿泊日・人数を指定せず、ホテル候補を広く取得します。指定日の最安値取得は、お気に入りホテルまたは価格追跡中ホテルの個別取得でのみ行います。
 
 地区候補に小分類コードがある場合はまず小分類で検索し、候補が少なければ中分類へ広げます。周辺エリアを含めた検索になった場合は画面に注意文を表示します。
 
 ページングと候補数の確認例:
 
 ```text
-/api/hotels?keyword=栃木&checkIn=2026-07-25&checkOut=2026-07-26&guests=2&page=2&limit=10&debug=true
+/api/hotels?keyword=栃木&minPrice=5000&maxPrice=20000&page=2&limit=10&debug=true
 ```
 
-`debug=true` では、アプリ側のページ番号・offset・件数、楽天APIの取得ページ数、地区フォールバック、指定日価格補完の件数を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
+`debug=true` では、アプリ側のページ番号・offset・件数、楽天APIの取得ページ数、地区フォールバック、探索フィルタの適用状況を確認できます。APIキー、DB接続文字列、Cronシークレットなどの秘密情報は返しません。
 
 ## お気に入り中心の価格追跡
 
@@ -817,7 +814,7 @@ Providerの切り替えには次の環境変数を使います。
 例:
 
 ```text
-http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02&guests=2&sortBy=priceAsc
+http://localhost:3000/?destination=東京&minPrice=5000&maxPrice=20000&minUserRating=4.0&minHotelClass=3&amenities=onsen,parking,internet&page=1
 ```
 
 リセットボタンを押すと検索条件を消し、URLクエリも初期状態に戻します。
@@ -826,8 +823,9 @@ http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02
 
 ホテル検索画面は、Googleホテルの使いやすい構成を参考にしつつ、独自のホテル価格追跡UIとして設計しています。Googleのロゴ、配色、文言をコピーするものではありません。
 
-- 上部に横長の検索バーを配置し、目的地、食事条件、価格条件、こだわり条件を指定できます。
-- トップ画面はホテル探索用のため、チェックイン日、チェックアウト日、人数は入力しません。
+- 上部に横長の検索バーを配置し、目的地、価格条件、利用者評価、ホテルクラス、設備条件を指定できます。
+- トップ画面はホテル探索用のため、チェックイン日、チェックアウト日、人数、食事条件は入力しません。
+- トップ画面では設備条件、利用者評価、ホテルクラス、価格帯でホテル候補を絞り込めます。
 - 選択中の条件はフィルターチップとして表示し、チップの削除でURLクエリから条件を外して再検索できます。
 - PCでは左にホテル一覧、右に地図プレースホルダーを置く2カラム構成です。スマホでは1カラムで表示します。
 - ホテルカードは画像、ホテル名、評価、エリア、特徴タグ、価格、予約サイト確認、詳細、価格推移への導線を見やすく整理しています。
@@ -835,20 +833,23 @@ http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02
 - 検索一覧では参考最安値のみ表示します。指定日の最安値はお気に入りホテルまたは価格追跡中ホテルで確認します。
 - 検索一覧では楽天API制限を避けるため、全ホテルに対して詳細な指定日価格取得を実行しません。価格未取得のホテルも候補から除外しません。
 - 地図プレースホルダーは将来的にGoogle MapsやMapboxなどへ差し替えやすい表示枠として用意しています。
-- 実際の料金、空室、予約条件は楽天トラベル側で確認してください。
+- 実際の料金、設備、食事条件、空室、予約条件は楽天トラベル側で確認してください。
 
 ## ホテル探索と価格追跡の分離
 
 トップ画面はホテル候補を探すための画面です。宿泊日や人数を指定した価格確認は、ホテル詳細ページまたはお気に入りページから価格追跡を開始するときに行います。
 
-- トップ画面のURLクエリは `destination`、`mealPlan`、`minPrice`、`maxPrice`、`features`、`page` を使います。
-- 既存URLに `checkIn`、`checkOut`、`guests` が含まれていても、トップ画面では無視します。
+- トップ画面のURLクエリは `destination`、`minPrice`、`maxPrice`、`minUserRating`、`minHotelClass`、`amenities`、`page` を使います。
+- トップ画面から食事条件は外しています。既存URLに `checkIn`、`checkOut`、`guests`、`mealPlan` が含まれていても、トップ画面では無視します。
 - トップ画面の価格は `hotelMinCharge` 由来の参考最安値です。指定日の価格としては扱いません。
-- 指定日の最安値は楽天トラベル空室検索APIの `dailyCharge.total` の最小値を使います。
-- 価格追跡を開始するときに、チェックイン日、チェックアウト日、大人人数、食事条件、価格条件、こだわり条件を入力します。
+- 設備条件は楽天APIから取得できるホテル名、施設特色、アクセス、住所、駐車場情報などのテキストに基づく推定です。楽天APIから直接判定できない設備は厳密検索しません。
+- 指定日の最安値は、お気に入りホテルまたは価格追跡中ホテルでのみ表示し、楽天トラベル空室検索APIの `dailyCharge.total` の最小値を使います。
+- 価格追跡を開始するときに、チェックイン日、チェックアウト日、大人人数、食事条件、価格条件、設備条件を入力します。
+- 食事条件は価格追跡開始時に指定し、楽天トラベル空室検索APIの `squeezeCondition` へ `breakfast`、`dinner` として渡します。
 - 価格追跡を開始したホテルは自動でお気に入りに追加されます。
 - CronはDBに保存された `enabled=true` の追跡条件に基づいて、毎日最低価格を取得します。
 - 楽天API制限を避けるため、検索一覧ではホテルごとの指定日価格取得を行いません。
+- 実際の料金、設備、食事条件は楽天トラベルで確認してください。
 
 追跡対象にホテル表示情報と追跡条件を保存するため、既存DBには以下のカラム追加が必要です。Neon SQL Editorなどで実行してください。秘密情報はSQLに含めません。
 

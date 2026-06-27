@@ -60,6 +60,8 @@ export type RakutenDateSpecificLowestPrice = {
   warnings: string[];
 };
 
+export type RakutenMealPlan = "" | "breakfast" | "dinner" | "dinnerBreakfast";
+
 type RakutenResponse = {
   hotels?: unknown[];
   error?: string;
@@ -345,11 +347,13 @@ export async function fetchRakutenDateSpecificLowestPrice({
   checkInDate,
   checkOutDate,
   adults,
+  mealPlan = "",
 }: {
   hotelId: string;
   checkInDate: string;
   checkOutDate: string;
   adults: number;
+  mealPlan?: RakutenMealPlan | string;
 }): Promise<RakutenDateSpecificLowestPrice> {
   const hotelNo = extractRakutenHotelNo(hotelId);
   if (!hotelNo) {
@@ -398,6 +402,8 @@ export async function fetchRakutenDateSpecificLowestPrice({
       params.set("responseType", "large");
       params.set("hits", "30");
       params.set("page", String(page));
+      const squeezeCondition = mealPlanToSqueezeCondition(mealPlan);
+      if (squeezeCondition) params.set("squeezeCondition", squeezeCondition);
 
       const { response, responseBody, requestUrl } = await fetchRakutenApi(
         VACANT_HOTEL_SEARCH_ENDPOINT,
@@ -539,4 +545,11 @@ export async function fetchRakutenDateSpecificLowestPrice({
     warnings,
     attemptedRequests,
   };
+}
+
+function mealPlanToSqueezeCondition(mealPlan: RakutenMealPlan | string): string {
+  if (mealPlan === "breakfast") return "breakfast";
+  if (mealPlan === "dinner") return "dinner";
+  if (mealPlan === "dinnerBreakfast") return "breakfast,dinner";
+  return "";
 }

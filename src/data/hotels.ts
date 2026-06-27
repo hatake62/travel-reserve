@@ -6,6 +6,9 @@ export const hotels: Hotel[] = [
     name: "東京ベイサイドホテル",
     area: "東京都・東京駅周辺",
     rating: 4.4,
+    hotelClass: 4,
+    amenities: ["parking", "internet", "stationNear"],
+    amenityText: "東京駅 徒歩 駐車場 Wi-Fi インターネット 禁煙ルーム",
     imageUrl: "",
     offers: [
       {
@@ -47,6 +50,9 @@ export const hotels: Hotel[] = [
     name: "新宿アーバンステイ",
     area: "東京都・新宿",
     rating: 4.1,
+    hotelClass: 3,
+    amenities: ["internet", "nonSmoking", "stationNear", "sauna"],
+    amenityText: "新宿駅 徒歩 Wi-Fi インターネット 禁煙 サウナ",
     imageUrl:
       "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1200&q=80",
     offers: [
@@ -81,6 +87,9 @@ export const hotels: Hotel[] = [
     name: "渋谷スカイホテル",
     area: "東京都・渋谷",
     rating: 4.6,
+    hotelClass: 5,
+    amenities: ["parking", "internet", "nonSmoking", "pool", "fitness"],
+    amenityText: "駐車場 Wi-Fi 禁煙 プール フィットネス ジム",
     imageUrl:
       "https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1200&q=80",
     offers: [
@@ -123,6 +132,9 @@ export const hotels: Hotel[] = [
     name: "横浜ハーバービューホテル",
     area: "神奈川県・横浜",
     rating: 4.3,
+    hotelClass: 4,
+    amenities: ["parking", "internet", "stationNear"],
+    amenityText: "駅 徒歩 駐車場 インターネット LAN",
     imageUrl:
       "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80",
     offers: [
@@ -157,6 +169,9 @@ export const hotels: Hotel[] = [
     name: "浅草リバーサイドイン",
     area: "東京都・浅草",
     rating: 4.0,
+    hotelClass: 3,
+    amenities: ["largeBath", "internet", "nonSmoking", "stationNear"],
+    amenityText: "浅草駅 徒歩 大浴場 Wi-Fi 禁煙",
     imageUrl:
       "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=1200&q=80",
     offers: [

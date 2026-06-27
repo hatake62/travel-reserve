@@ -244,6 +244,7 @@ export default function PriceHistorySection({
           checkInDate,
           checkOutDate,
           adults,
+          mealPlan,
         }),
         headers: {
           Accept: "application/json",

@@ -27,7 +27,17 @@ export type Hotel = {
   };
   name: string;
   area: string;
-  rating: number;
+  rating?: number | null;
+  hotelClass?: number | null;
+  amenities?: string[];
+  amenityText?: string;
+  access?: string;
+  description?: string;
+  sourceFields?: {
+    rating?: string;
+    hotelClass?: string;
+    amenities?: string[];
+  };
   imageUrl?: string | null;
   offers: HotelOffer[];
 };

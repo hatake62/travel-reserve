@@ -44,7 +44,7 @@ export default function SearchSummary({
         </p>
       )}
       <p className="mt-3 text-xs leading-5 text-slate-500">
-        一部ホテルの指定日価格は未取得の場合があります。実際の料金・空室は楽天トラベルで確認してください。
+        トップ画面では参考最安値を表示しています。指定日の価格推移はお気に入り追加後に確認できます。
       </p>
     </div>
   );

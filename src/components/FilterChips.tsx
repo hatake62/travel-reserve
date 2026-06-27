@@ -1,3 +1,4 @@
+import { AMENITY_OPTIONS } from "@/lib/searchParams";
 import type { SearchCondition } from "@/types/search";
 
 type FilterChipsProps = {
@@ -5,11 +6,9 @@ type FilterChipsProps = {
   onChange: (condition: SearchCondition) => void;
 };
 
-function getMealPlanLabel(mealPlan: SearchCondition["mealPlan"]): string {
-  if (mealPlan === "breakfast") return "朝食付き";
-  if (mealPlan === "dinnerBreakfast") return "夕朝食付き";
-  return "";
-}
+const amenityLabels = new Map(
+  AMENITY_OPTIONS.map((option) => [option.value, option.label]),
+);
 
 export default function FilterChips({ condition, onChange }: FilterChipsProps) {
   const chips: Array<{ key: string; label: string; remove: () => SearchCondition }> = [];
@@ -23,20 +22,6 @@ export default function FilterChips({ condition, onChange }: FilterChipsProps) {
         destination: "",
         page: 1,
         rakutenAreaCandidate: undefined,
-      }),
-    });
-  }
-
-  const mealPlanLabel = getMealPlanLabel(condition.mealPlan);
-  if (mealPlanLabel) {
-    chips.push({
-      key: "mealPlan",
-      label: mealPlanLabel,
-      remove: () => ({
-        ...condition,
-        mealPlan: "",
-        breakfastOnly: false,
-        page: 1,
       }),
     });
   }
@@ -57,13 +42,32 @@ export default function FilterChips({ condition, onChange }: FilterChipsProps) {
     });
   }
 
-  for (const feature of condition.features) {
+  if (condition.minUserRating !== null) {
     chips.push({
-      key: `feature-${feature}`,
-      label: feature,
+      key: "minUserRating",
+      label: `評価${condition.minUserRating.toFixed(1)}以上`,
+      remove: () => ({ ...condition, minUserRating: null, page: 1 }),
+    });
+  }
+
+  if (condition.minHotelClass !== null) {
+    chips.push({
+      key: "minHotelClass",
+      label:
+        condition.minHotelClass === 5
+          ? "5つ星"
+          : `${condition.minHotelClass}つ星以上`,
+      remove: () => ({ ...condition, minHotelClass: null, page: 1 }),
+    });
+  }
+
+  for (const amenity of condition.amenities) {
+    chips.push({
+      key: `amenity-${amenity}`,
+      label: amenityLabels.get(amenity) ?? amenity,
       remove: () => ({
         ...condition,
-        features: condition.features.filter((value) => value !== feature),
+        amenities: condition.amenities.filter((value) => value !== amenity),
         page: 1,
       }),
     });

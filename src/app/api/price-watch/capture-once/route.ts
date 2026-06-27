@@ -13,6 +13,7 @@ type CaptureOnceRequest = {
   checkInDate?: unknown;
   checkOutDate?: unknown;
   adults?: unknown;
+  mealPlan?: unknown;
 };
 
 function isDateString(value: unknown): value is string {
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
       checkInDate,
       checkOutDate,
       adults: parseAdults(body.adults),
+      mealPlan: typeof body.mealPlan === "string" ? body.mealPlan : "",
     });
     const result = await savePriceSnapshot(snapshot);
 

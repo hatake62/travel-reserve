@@ -9,7 +9,19 @@ export type BookingSite =
   | "Yahoo!トラベル"
   | "一休.com";
 
-export type MealPlan = "" | "breakfast" | "dinnerBreakfast";
+export type MealPlan = "" | "breakfast" | "dinner" | "dinnerBreakfast";
+
+export type Amenity =
+  | "onsen"
+  | "largeBath"
+  | "parking"
+  | "internet"
+  | "nonSmoking"
+  | "petFriendly"
+  | "stationNear"
+  | "sauna"
+  | "pool"
+  | "fitness";
 
 export type SearchCondition = {
   destination: string;
@@ -20,6 +32,9 @@ export type SearchCondition = {
   mealPlan: MealPlan;
   minPrice: number | null;
   maxPrice: number | null;
+  minUserRating: number | null;
+  minHotelClass: number | null;
+  amenities: Amenity[];
   features: string[];
   site: BookingSite;
   breakfastOnly: boolean;
@@ -32,6 +47,11 @@ export type HotelSearchParams = {
   checkIn?: string;
   checkOut?: string;
   guests?: number;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  minUserRating?: number | null;
+  minHotelClass?: number | null;
+  amenities?: Amenity[];
   rakutenAreaCandidate?: RakutenAreaCandidate;
   areaClassCode?: string;
   middleClassCode?: string;

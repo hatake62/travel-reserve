@@ -55,9 +55,20 @@ export default function HotelCard({ hotel, checkIn, checkOut, adults }: HotelCar
                 {hotel.name}
                 </h2>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">
-                    評価 {hotel.rating.toFixed(1)}
-                  </span>
+                  {typeof hotel.rating === "number" && Number.isFinite(hotel.rating) ? (
+                    <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">
+                      評価 {hotel.rating.toFixed(1)}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                      評価未取得
+                    </span>
+                  )}
+                  {typeof hotel.hotelClass === "number" && Number.isFinite(hotel.hotelClass) && (
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
+                      {hotel.hotelClass}つ星
+                    </span>
+                  )}
                   {hasDateCondition && (
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
                       {checkIn}泊 / 大人{adults}名

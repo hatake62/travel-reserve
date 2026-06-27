@@ -1,6 +1,9 @@
 import { getHotelProvider } from "@/lib/hotelProviders";
 import { NextResponse } from "next/server";
 import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
+import { applyHotelDiscoveryFilters } from "@/lib/hotelDiscoveryFilters";
+import { AMENITY_OPTIONS } from "@/lib/searchParams";
+import type { Amenity } from "@/types/search";
 
 const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = 0;
 const DEFAULT_PAGE_SIZE = 10;
@@ -12,10 +15,25 @@ function parsePositiveInteger(value: string | null, defaultValue: number, max?: 
   return max ? Math.min(parsed, max) : parsed;
 }
 
+function parseNullableNumber(value: string | null): number | null {
+  if (value === null || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseAmenities(value: string | null): Amenity[] {
+  const amenityValues = new Set(AMENITY_OPTIONS.map((option) => option.value));
+  return (value ?? "")
+    .split(",")
+    .map((amenity) => amenity.trim())
+    .filter((amenity): amenity is Amenity => amenityValues.has(amenity as Amenity));
+}
+
 export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
     const keyword = params.get("keyword") ?? undefined;
+    const mealPlanIgnoredOnSearch = params.has("mealPlan");
     // Top search is hotel discovery only. Stay dates and guest count are handled
     // in price tracking flows to avoid per-hotel vacant search API calls.
     const checkIn = undefined;
@@ -31,9 +49,19 @@ export async function GET(request: Request) {
     const page = parsePositiveInteger(params.get("page"), 1);
     const limit = parsePositiveInteger(params.get("limit"), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const debug = params.get("debug") === "true";
+    const minPrice = parseNullableNumber(params.get("minPrice"));
+    const maxPrice = parseNullableNumber(params.get("maxPrice"));
+    const minUserRating = parseNullableNumber(params.get("minUserRating"));
+    const minHotelClass = parseNullableNumber(params.get("minHotelClass"));
+    const amenities = parseAmenities(params.get("amenities"));
     const providerNotices: string[] = requestedDetailClassCode
       ? ["詳細地区コードは楽天API互換性のため使用せず、広い地区条件で検索しています。"]
       : [];
+    if (mealPlanIgnoredOnSearch) {
+      providerNotices.push(
+        "Meal conditions are used when starting price tracking, not on top search results.",
+      );
+    }
     const searchOptions = {
       keyword,
       checkIn,
@@ -47,7 +75,15 @@ export async function GET(request: Request) {
     };
     const result = await getHotelProvider().getHotelsWithDebug?.(searchOptions);
     if (!result) throw new Error("ホテルProviderの検索結果を取得できませんでした。");
-    const hotels = result.hotels;
+    const rawMergedHotels = result.hotels;
+    const filtered = applyHotelDiscoveryFilters(rawMergedHotels, {
+      minPrice,
+      maxPrice,
+      minUserRating,
+      minHotelClass,
+      amenities,
+    });
+    const hotels = filtered.hotels;
     const totalBeforePagination = hotels.length;
     const totalPages = Math.max(1, Math.ceil(totalBeforePagination / limit));
     const resolvedPage = Math.min(page, totalPages);
@@ -103,11 +139,21 @@ export async function GET(request: Request) {
               ...result.debug,
               ...dateSpecificDebug,
               keyword: keyword ?? "",
+              priceDisplayMode: "reference_on_search",
+              dateSpecificPriceEnabled: false,
+              mealPlanIgnoredOnSearch,
+              ...(mealPlanIgnoredOnSearch
+                ? {
+                    reason:
+                      "Meal conditions are used when starting price tracking, not on top search results.",
+                  }
+                : {}),
+              ...filtered.debug,
               appPage: resolvedPage,
               appLimit: limit,
               appOffset: offset,
               totalBeforePagination,
-              totalAfterMerge: hotels.length,
+              totalAfterMerge: rawMergedHotels.length,
               returnedCount: responseHotels.length,
               totalPages,
               hasNext: resolvedPage < totalPages,
@@ -116,8 +162,9 @@ export async function GET(request: Request) {
               ignoredDetailClassCode: Boolean(requestedDetailClassCode),
               fallbackSteps: fallbackWarnings,
               rawHotelCount: result.debug.rawCount,
-              mergedHotelCount: hotels.length,
+              mergedHotelCount: rawMergedHotels.length,
               displayedHotelCount: responseHotels.length,
+              warnings: [...result.debug.warnings, ...fallbackWarnings, ...providerNotices],
               dateSpecificPriceCheckedCount: dateSpecificDebug.checkedCount,
               dateSpecificPriceAvailableCount: dateSpecificDebug.pricedHotelCount,
               dateSpecificPriceNotFoundCount: dateSpecificDebug.notFoundCount,

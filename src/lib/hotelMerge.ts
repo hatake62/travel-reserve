@@ -73,12 +73,18 @@ function informationScore(hotel: Hotel): number {
     hotel.name.trim().length +
     hotel.area.trim().length +
     (hotel.imageUrl?.trim() ? 20 : 0) +
-    (hotel.rating > 0 ? 5 : 0)
+    ((hotel.rating ?? 0) > 0 ? 5 : 0)
   );
 }
 
 function mergeHotelPair(current: Hotel, incoming: Hotel): Hotel {
   const richer = informationScore(incoming) > informationScore(current) ? incoming : current;
+  const currentRating = current.rating ?? null;
+  const incomingRating = incoming.rating ?? null;
+  const rating =
+    currentRating === null && incomingRating === null
+      ? null
+      : Math.max(currentRating ?? 0, incomingRating ?? 0);
 
   return {
     ...current,
@@ -90,7 +96,20 @@ function mergeHotelPair(current: Hotel, incoming: Hotel): Hotel {
     imageUrl: richer.imageUrl?.trim()
       ? richer.imageUrl
       : current.imageUrl || incoming.imageUrl,
-    rating: Math.max(current.rating, incoming.rating),
+    rating,
+    hotelClass: current.hotelClass ?? incoming.hotelClass ?? null,
+    amenities: [...new Set([...(current.amenities ?? []), ...(incoming.amenities ?? [])])],
+    amenityText: [current.amenityText, incoming.amenityText].filter(Boolean).join(" "),
+    access: current.access || incoming.access,
+    description: current.description || incoming.description,
+    sourceFields: {
+      ...current.sourceFields,
+      ...incoming.sourceFields,
+      amenities: [
+        ...(current.sourceFields?.amenities ?? []),
+        ...(incoming.sourceFields?.amenities ?? []),
+      ],
+    },
     providerIds: {
       ...current.providerIds,
       ...incoming.providerIds,

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { DEFAULT_SEARCH_CONDITION } from "@/lib/searchParams";
+import { AMENITY_OPTIONS, DEFAULT_SEARCH_CONDITION } from "@/lib/searchParams";
 import type { RakutenAreaCandidate } from "@/types/rakutenArea";
-import type { BookingSite, MealPlan, SearchCondition, SortBy } from "@/types/search";
+import type { Amenity, SearchCondition } from "@/types/search";
 
 type SearchFormProps = {
   onSearch: (condition: SearchCondition) => void;
@@ -15,8 +15,6 @@ type SearchFormProps = {
 const fieldClassName =
   "min-h-14 w-full border-0 bg-transparent px-0 text-sm font-semibold text-slate-950 outline-none placeholder:text-slate-400 focus:ring-0";
 
-const FEATURE_OPTIONS = ["禁煙", "温泉", "大浴場", "インターネット利用可"];
-
 export default function SearchForm({
   onSearch,
   onReset,
@@ -24,17 +22,19 @@ export default function SearchForm({
   isLoading = false,
 }: SearchFormProps) {
   const [destination, setDestination] = useState(initialCondition.destination);
-  const [sortBy, setSortBy] = useState<SortBy>(initialCondition.sortBy);
-  const [mealPlan, setMealPlan] = useState<MealPlan>(initialCondition.mealPlan);
   const [minPrice, setMinPrice] = useState(
     initialCondition.minPrice === null ? "" : String(initialCondition.minPrice),
   );
   const [maxPrice, setMaxPrice] = useState(
     initialCondition.maxPrice === null ? "" : String(initialCondition.maxPrice),
   );
-  const [site, setSite] = useState<BookingSite>(initialCondition.site);
-  const [breakfastOnly, setBreakfastOnly] = useState(initialCondition.breakfastOnly);
-  const [features, setFeatures] = useState<string[]>(initialCondition.features);
+  const [minUserRating, setMinUserRating] = useState(
+    initialCondition.minUserRating === null ? "" : String(initialCondition.minUserRating),
+  );
+  const [minHotelClass, setMinHotelClass] = useState(
+    initialCondition.minHotelClass === null ? "" : String(initialCondition.minHotelClass),
+  );
+  const [amenities, setAmenities] = useState<Amenity[]>(initialCondition.amenities);
   const [rakutenAreaCandidate, setRakutenAreaCandidate] = useState<RakutenAreaCandidate>();
   const [areaCandidates, setAreaCandidates] = useState<RakutenAreaCandidate[]>([]);
   const [isLoadingAreas, setIsLoadingAreas] = useState(false);
@@ -42,13 +42,11 @@ export default function SearchForm({
 
   const handleReset = () => {
     setDestination(DEFAULT_SEARCH_CONDITION.destination);
-    setSortBy(DEFAULT_SEARCH_CONDITION.sortBy);
-    setMealPlan(DEFAULT_SEARCH_CONDITION.mealPlan);
     setMinPrice("");
     setMaxPrice("");
-    setSite(DEFAULT_SEARCH_CONDITION.site);
-    setBreakfastOnly(DEFAULT_SEARCH_CONDITION.breakfastOnly);
-    setFeatures([]);
+    setMinUserRating("");
+    setMinHotelClass("");
+    setAmenities([]);
     setRakutenAreaCandidate(undefined);
     setAreaCandidates([]);
     setAreaError(null);
@@ -103,13 +101,16 @@ export default function SearchForm({
       checkIn: "",
       checkOut: "",
       guests: DEFAULT_SEARCH_CONDITION.guests,
-      sortBy,
-      mealPlan,
+      sortBy: DEFAULT_SEARCH_CONDITION.sortBy,
+      mealPlan: "",
       minPrice: minPrice === "" ? null : Number(minPrice),
       maxPrice: maxPrice === "" ? null : Number(maxPrice),
-      features,
-      site,
-      breakfastOnly: breakfastOnly || mealPlan === "breakfast" || mealPlan === "dinnerBreakfast",
+      minUserRating: minUserRating === "" ? null : Number(minUserRating),
+      minHotelClass: minHotelClass === "" ? null : Number(minHotelClass),
+      amenities,
+      features: [],
+      site: "",
+      breakfastOnly: false,
       page: 1,
       rakutenAreaCandidate,
     });
@@ -191,42 +192,7 @@ export default function SearchForm({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="mealPlan">
-          食事条件
-          <select
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            id="mealPlan"
-            name="mealPlan"
-            onChange={(event) => {
-              const nextMealPlan = event.target.value as MealPlan;
-              setMealPlan(nextMealPlan);
-              setBreakfastOnly(nextMealPlan === "breakfast" || nextMealPlan === "dinnerBreakfast");
-            }}
-            value={mealPlan}
-          >
-            <option value="">指定なし</option>
-            <option value="breakfast">朝食付き</option>
-            <option value="dinnerBreakfast">夕朝食付き</option>
-          </select>
-        </label>
-
-        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="sortBy">
-          並び替え
-          <select
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            id="sortBy"
-            name="sortBy"
-            onChange={(event) => setSortBy(event.target.value as SortBy)}
-            value={sortBy}
-          >
-            <option value="recommended">おすすめ順</option>
-            <option value="priceAsc">安い順</option>
-            <option value="priceDesc">高い順</option>
-            <option value="ratingDesc">評価が高い順</option>
-          </select>
-        </label>
-
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="minPrice">
           価格下限
           <input
@@ -236,7 +202,7 @@ export default function SearchForm({
             min="0"
             name="minPrice"
             onChange={(event) => setMinPrice(event.target.value)}
-            placeholder="例: 10000"
+            placeholder="例: 5000"
             step="100"
             type="number"
             value={minPrice}
@@ -259,30 +225,49 @@ export default function SearchForm({
           />
         </label>
 
-        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="site">
-          予約サイト
+        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="minUserRating">
+          利用者評価
           <select
             className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            id="site"
-            name="site"
-            onChange={(event) => setSite(event.target.value as BookingSite)}
-            value={site}
+            id="minUserRating"
+            name="minUserRating"
+            onChange={(event) => setMinUserRating(event.target.value)}
+            value={minUserRating}
           >
-            <option value="">すべて</option>
-            <option value="楽天トラベル">楽天トラベル</option>
-            <option value="じゃらん">じゃらん</option>
-            <option value="Yahoo!トラベル">Yahoo!トラベル</option>
-            <option value="一休.com">一休.com</option>
+            <option value="">指定なし</option>
+            <option value="3">3.0以上</option>
+            <option value="3.5">3.5以上</option>
+            <option value="4">4.0以上</option>
+            <option value="4.5">4.5以上</option>
+          </select>
+        </label>
+
+        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="minHotelClass">
+          ホテルクラス
+          <select
+            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
+            id="minHotelClass"
+            name="minHotelClass"
+            onChange={(event) => setMinHotelClass(event.target.value)}
+            value={minHotelClass}
+          >
+            <option value="">指定なし</option>
+            <option value="3">3つ星以上</option>
+            <option value="4">4つ星以上</option>
+            <option value="5">5つ星</option>
           </select>
         </label>
       </div>
 
       <div className="mt-4 flex flex-col gap-4 border-t border-slate-200 pt-4 lg:flex-row lg:items-center lg:justify-between">
         <fieldset>
-          <legend className="mb-2 text-xs font-bold text-slate-500">こだわり条件</legend>
+          <legend className="mb-1 text-xs font-bold text-slate-500">設備条件</legend>
+          <p className="mb-2 text-xs font-semibold text-slate-500">
+            ホテルクラスは取得できる範囲で絞り込みます。
+          </p>
           <div className="flex flex-wrap gap-2">
-            {FEATURE_OPTIONS.map((feature) => {
-              const checked = features.includes(feature);
+            {AMENITY_OPTIONS.map((option) => {
+              const checked = amenities.includes(option.value);
               return (
                 <label
                   className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${
@@ -290,21 +275,21 @@ export default function SearchForm({
                       ? "border-sky-700 bg-sky-50 text-sky-800"
                       : "border-slate-300 bg-white text-slate-700 hover:border-sky-300"
                   }`}
-                  key={feature}
+                  key={option.value}
                 >
                   <input
                     checked={checked}
                     className="sr-only"
                     onChange={(event) => {
-                      setFeatures((current) =>
+                      setAmenities((current) =>
                         event.target.checked
-                          ? [...current, feature]
-                          : current.filter((value) => value !== feature),
+                          ? [...current, option.value]
+                          : current.filter((value) => value !== option.value),
                       );
                     }}
                     type="checkbox"
                   />
-                  {feature}
+                  {option.label}
                 </label>
               );
             })}

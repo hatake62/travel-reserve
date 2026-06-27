@@ -8,6 +8,7 @@ type FetchRakutenPriceSnapshotParams = {
   checkInDate: string;
   checkOutDate: string;
   adults: number;
+  mealPlan?: string;
 };
 
 export async function fetchRakutenPriceSnapshot({
@@ -15,12 +16,14 @@ export async function fetchRakutenPriceSnapshot({
   checkInDate,
   checkOutDate,
   adults,
+  mealPlan = "",
 }: FetchRakutenPriceSnapshotParams): Promise<PriceSnapshot> {
   const result = await fetchRakutenDateSpecificLowestPrice({
     hotelId,
     checkInDate,
     checkOutDate,
     adults,
+    mealPlan,
   });
 
   return {

@@ -60,6 +60,11 @@ export async function fetchHotels({
   checkIn,
   checkOut,
   guests,
+  minPrice,
+  maxPrice,
+  minUserRating,
+  minHotelClass,
+  amenities,
   rakutenAreaCandidate,
   areaClassCode,
   middleClassCode,
@@ -73,6 +78,15 @@ export async function fetchHotels({
   if (typeof window !== "undefined") {
     const params = new URLSearchParams();
     if (keyword?.trim()) params.set("keyword", keyword.trim());
+    if (minPrice !== null && minPrice !== undefined) params.set("minPrice", String(minPrice));
+    if (maxPrice !== null && maxPrice !== undefined) params.set("maxPrice", String(maxPrice));
+    if (minUserRating !== null && minUserRating !== undefined) {
+      params.set("minUserRating", String(minUserRating));
+    }
+    if (minHotelClass !== null && minHotelClass !== undefined) {
+      params.set("minHotelClass", String(minHotelClass));
+    }
+    if (amenities && amenities.length > 0) params.set("amenities", amenities.join(","));
     if (page && page > 1) params.set("page", String(page));
     if (limit) params.set("limit", String(limit));
     const resolvedAreaClassCode = rakutenAreaCandidate?.areaClassCode ?? areaClassCode;
@@ -115,6 +129,11 @@ export async function fetchHotels({
     detailClassCode,
     page,
     limit,
+    minPrice,
+    maxPrice,
+    minUserRating,
+    minHotelClass,
+    amenities,
     onNotice,
   });
   return {

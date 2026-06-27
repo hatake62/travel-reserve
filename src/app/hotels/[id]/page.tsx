@@ -165,7 +165,9 @@ export default function HotelDetailPage({
                 </div>
               </div>
               <span className="w-fit shrink-0 rounded-lg bg-amber-50 px-3 py-2 font-bold text-amber-700">
-                ★ {hotel.rating.toFixed(1)}
+                {typeof hotel.rating === "number" && Number.isFinite(hotel.rating)
+                  ? `★ ${hotel.rating.toFixed(1)}`
+                  : "評価未取得"}
               </span>
             </header>
 

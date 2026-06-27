@@ -1,6 +1,7 @@
 "use client";
 
 import type { MealPlan } from "@/types/search";
+import { AMENITY_OPTIONS } from "@/lib/searchParams";
 
 type PriceTrackingFormProps = {
   checkInDate: string;
@@ -19,7 +20,7 @@ type PriceTrackingFormProps = {
   onFeaturesChange: (value: string[]) => void;
 };
 
-const FEATURE_OPTIONS = ["禁煙", "温泉", "大浴場", "インターネット利用可"];
+const FEATURE_OPTIONS = AMENITY_OPTIONS.map((option) => option.label);
 
 export default function PriceTrackingForm({
   checkInDate,
@@ -81,6 +82,7 @@ export default function PriceTrackingForm({
           >
             <option value="">指定なし</option>
             <option value="breakfast">朝食付き</option>
+            <option value="dinner">夕食付き</option>
             <option value="dinnerBreakfast">夕朝食付き</option>
           </select>
         </label>
@@ -111,7 +113,7 @@ export default function PriceTrackingForm({
       </div>
 
       <fieldset>
-        <legend className="mb-2 text-sm font-bold text-slate-700">こだわり条件</legend>
+        <legend className="mb-2 text-sm font-bold text-slate-700">設備条件</legend>
         <div className="flex flex-wrap gap-2">
           {FEATURE_OPTIONS.map((feature) => {
             const checked = features.includes(feature);
