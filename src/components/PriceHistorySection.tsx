@@ -3,10 +3,12 @@
 import ErrorMessage from "@/components/ErrorMessage";
 import LoadingState from "@/components/LoadingState";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
+import PriceTrackingForm from "@/components/PriceTrackingForm";
 import type { BookingLinksResponse } from "@/types/bookingLinks";
 import type { PriceHistoryResponse, PriceWatchTarget } from "@/types/priceHistory";
 import { getFavoriteHotelIdsSnapshot, subscribeToFavoriteHotelIds, upsertFavoriteHotel } from "@/lib/favorites";
 import type { Hotel } from "@/types/hotel";
+import type { MealPlan } from "@/types/search";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
@@ -64,6 +66,10 @@ export default function PriceHistorySection({
   const [checkInDate, setCheckInDate] = useState(defaultDates.checkInDate);
   const [checkOutDate, setCheckOutDate] = useState(defaultDates.checkOutDate);
   const [adults, setAdults] = useState(2);
+  const [mealPlan, setMealPlan] = useState<MealPlan>("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [features, setFeatures] = useState<string[]>([]);
   const [history, setHistory] = useState<PriceHistoryResponse | null>(null);
   const [bookingLinks, setBookingLinks] = useState<BookingLinksResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -130,6 +136,10 @@ export default function PriceHistorySection({
           checkInDate,
           checkOutDate,
           adults,
+          mealPlan,
+          minPrice: minPrice === "" ? null : Number(minPrice),
+          maxPrice: maxPrice === "" ? null : Number(maxPrice),
+          features,
           hotelName: hotel.name,
           imageUrl: hotel.imageUrl ?? "",
           address: hotel.area,
@@ -319,7 +329,31 @@ export default function PriceHistorySection({
     return (
       <section className="mt-10 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-bold text-slate-900">料金推移</h2>
-        <p className="mt-2 text-sm text-slate-600">価格遷移を見るにはお気に入りに追加してください。価格追跡を開始すると、お気に入りにも自動追加されます。</p>
+        <p className="mt-2 text-sm text-slate-600">価格推移を見るには宿泊日を指定して価格追跡を開始してください。価格追跡を開始すると、お気に入りにも自動追加されます。</p>
+        <div className="mt-5">
+          <PriceTrackingForm
+            adults={adults}
+            checkInDate={checkInDate}
+            checkOutDate={checkOutDate}
+            features={features}
+            maxPrice={maxPrice}
+            mealPlan={mealPlan}
+            minPrice={minPrice}
+            onAdultsChange={setAdults}
+            onCheckInDateChange={(value) => {
+              setCheckInDate(value);
+              setBookingLinks(null);
+            }}
+            onCheckOutDateChange={(value) => {
+              setCheckOutDate(value);
+              setBookingLinks(null);
+            }}
+            onFeaturesChange={setFeatures}
+            onMaxPriceChange={setMaxPrice}
+            onMealPlanChange={setMealPlan}
+            onMinPriceChange={setMinPrice}
+          />
+        </div>
         <button className="mt-4 h-11 rounded-lg bg-sky-700 px-5 text-sm font-bold text-white disabled:bg-slate-300" disabled={isRegistering} onClick={registerPriceWatchTarget} type="button">
           {isRegistering ? "開始中..." : "お気に入りに追加して価格追跡を開始"}
         </button>
@@ -352,46 +386,31 @@ export default function PriceHistorySection({
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_120px] md:items-end">
-        <label className="block">
-          <span className="text-sm font-bold text-slate-700">チェックイン</span>
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            onChange={(event) => {
-              setCheckInDate(event.target.value);
-              setBookingLinks(null);
-            }}
-            type="date"
-            value={checkInDate}
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-bold text-slate-700">チェックアウト</span>
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            onChange={(event) => {
-              setCheckOutDate(event.target.value);
-              setBookingLinks(null);
-            }}
-            type="date"
-            value={checkOutDate}
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-bold text-slate-700">人数</span>
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-100"
-            max={10}
-            min={1}
-            onChange={(event) => {
-              setAdults(Number(event.target.value));
-              setBookingLinks(null);
-            }}
-            type="number"
-            value={adults}
-          />
-        </label>
-      </div>
+      <PriceTrackingForm
+        adults={adults}
+        checkInDate={checkInDate}
+        checkOutDate={checkOutDate}
+        features={features}
+        maxPrice={maxPrice}
+        mealPlan={mealPlan}
+        minPrice={minPrice}
+        onAdultsChange={(value) => {
+          setAdults(value);
+          setBookingLinks(null);
+        }}
+        onCheckInDateChange={(value) => {
+          setCheckInDate(value);
+          setBookingLinks(null);
+        }}
+        onCheckOutDateChange={(value) => {
+          setCheckOutDate(value);
+          setBookingLinks(null);
+        }}
+        onFeaturesChange={setFeatures}
+        onMaxPriceChange={setMaxPrice}
+        onMealPlanChange={setMealPlan}
+        onMinPriceChange={setMinPrice}
+      />
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <button

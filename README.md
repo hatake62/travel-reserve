@@ -826,14 +826,57 @@ http://localhost:3000/?destination=東京&checkIn=2026-08-01&checkOut=2026-08-02
 
 ホテル検索画面は、Googleホテルの使いやすい構成を参考にしつつ、独自のホテル価格追跡UIとして設計しています。Googleのロゴ、配色、文言をコピーするものではありません。
 
-- 上部に横長の検索バーを配置し、目的地、宿泊日、人数、食事条件、価格条件、こだわり条件をまとめて指定できます。
+- 上部に横長の検索バーを配置し、目的地、食事条件、価格条件、こだわり条件を指定できます。
+- トップ画面はホテル探索用のため、チェックイン日、チェックアウト日、人数は入力しません。
 - 選択中の条件はフィルターチップとして表示し、チップの削除でURLクエリから条件を外して再検索できます。
 - PCでは左にホテル一覧、右に地図プレースホルダーを置く2カラム構成です。スマホでは1カラムで表示します。
 - ホテルカードは画像、ホテル名、評価、エリア、特徴タグ、価格、予約サイト確認、詳細、価格推移への導線を見やすく整理しています。
 - お気に入りホテルの価格推移を重視し、価格追跡を開始したホテルは自動でお気に入りに追加されます。
-- 検索一覧では楽天API制限を避けるため、全ホテルに対して詳細な指定日価格取得を大量実行しません。価格未取得のホテルも候補から除外しません。
+- 検索一覧では参考最安値のみ表示します。指定日の最安値はお気に入りホテルまたは価格追跡中ホテルで確認します。
+- 検索一覧では楽天API制限を避けるため、全ホテルに対して詳細な指定日価格取得を実行しません。価格未取得のホテルも候補から除外しません。
 - 地図プレースホルダーは将来的にGoogle MapsやMapboxなどへ差し替えやすい表示枠として用意しています。
 - 実際の料金、空室、予約条件は楽天トラベル側で確認してください。
+
+## ホテル探索と価格追跡の分離
+
+トップ画面はホテル候補を探すための画面です。宿泊日や人数を指定した価格確認は、ホテル詳細ページまたはお気に入りページから価格追跡を開始するときに行います。
+
+- トップ画面のURLクエリは `destination`、`mealPlan`、`minPrice`、`maxPrice`、`features`、`page` を使います。
+- 既存URLに `checkIn`、`checkOut`、`guests` が含まれていても、トップ画面では無視します。
+- トップ画面の価格は `hotelMinCharge` 由来の参考最安値です。指定日の価格としては扱いません。
+- 指定日の最安値は楽天トラベル空室検索APIの `dailyCharge.total` の最小値を使います。
+- 価格追跡を開始するときに、チェックイン日、チェックアウト日、大人人数、食事条件、価格条件、こだわり条件を入力します。
+- 価格追跡を開始したホテルは自動でお気に入りに追加されます。
+- CronはDBに保存された `enabled=true` の追跡条件に基づいて、毎日最低価格を取得します。
+- 楽天API制限を避けるため、検索一覧ではホテルごとの指定日価格取得を行いません。
+
+追跡対象にホテル表示情報と追跡条件を保存するため、既存DBには以下のカラム追加が必要です。Neon SQL Editorなどで実行してください。秘密情報はSQLに含めません。
+
+```sql
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS hotel_name TEXT;
+
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS address TEXT;
+
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS booking_url TEXT;
+
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS meal_plan TEXT;
+
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS min_price INTEGER;
+
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS max_price INTEGER;
+
+ALTER TABLE hotel_price_watch_targets
+ADD COLUMN IF NOT EXISTS features TEXT;
+```
 
 ## スクリーンショット
 

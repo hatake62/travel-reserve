@@ -44,12 +44,6 @@ function isMealPlan(value: string): value is MealPlan {
   return MEAL_PLAN_VALUES.some((mealPlan) => mealPlan === value);
 }
 
-function parseGuests(value: string | null): number {
-  if (value === null || value.trim() === "") return DEFAULT_SEARCH_CONDITION.guests;
-  const guests = Number(value);
-  return Number.isInteger(guests) && guests >= 1 && guests <= 5 ? guests : 1;
-}
-
 function parseMaxPrice(value: string | null): number | null {
   if (value === null || value.trim() === "") return null;
   const maxPrice = Number(value);
@@ -75,9 +69,6 @@ export function searchConditionToParams(
   if (condition.destination.trim()) {
     params.set("destination", condition.destination.trim());
   }
-  if (condition.checkIn) params.set("checkIn", condition.checkIn);
-  if (condition.checkOut) params.set("checkOut", condition.checkOut);
-  params.set("guests", String(condition.guests));
   if (condition.sortBy !== DEFAULT_SEARCH_CONDITION.sortBy) {
     params.set("sortBy", condition.sortBy);
   }
@@ -131,9 +122,9 @@ export function searchParamsToCondition(
 
   return {
     destination,
-    checkIn: params.get("checkIn") ?? "",
-    checkOut: params.get("checkOut") ?? "",
-    guests: parseGuests(params.get("guests")),
+    checkIn: "",
+    checkOut: "",
+    guests: DEFAULT_SEARCH_CONDITION.guests,
     sortBy: isSortBy(sortBy) ? sortBy : DEFAULT_SEARCH_CONDITION.sortBy,
     mealPlan: isMealPlan(mealPlan) ? mealPlan : DEFAULT_SEARCH_CONDITION.mealPlan,
     minPrice: parsePrice(params.get("minPrice")),

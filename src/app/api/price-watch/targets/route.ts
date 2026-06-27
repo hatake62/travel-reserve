@@ -13,6 +13,10 @@ type PriceWatchTargetRequest = {
   checkInDate?: unknown;
   checkOutDate?: unknown;
   adults?: unknown;
+  mealPlan?: unknown;
+  minPrice?: unknown;
+  maxPrice?: unknown;
+  features?: unknown;
   hotelName?: unknown;
   imageUrl?: unknown;
   address?: unknown;
@@ -26,6 +30,18 @@ function isDateString(value: unknown): value is string {
 function parseAdults(value: unknown): number {
   const adults = typeof value === "number" ? value : Number(value);
   return Number.isInteger(adults) && adults >= 1 && adults <= 10 ? adults : 2;
+}
+
+function parseNullablePrice(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
+function parseFeatures(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((feature): feature is string => typeof feature === "string")
+    : [];
 }
 
 function isCheckOutAfterCheckIn(checkInDate: string, checkOutDate: string): boolean {
@@ -71,6 +87,14 @@ export async function POST(request: Request) {
       checkOutDate,
       adults: parseAdults(body.adults),
       enabled: true,
+      mealPlan: typeof body.mealPlan === "string" ? body.mealPlan : "",
+      minPrice: parseNullablePrice(body.minPrice),
+      maxPrice: parseNullablePrice(body.maxPrice),
+      features: parseFeatures(body.features),
+      hotelName: typeof body.hotelName === "string" ? body.hotelName : "",
+      imageUrl: typeof body.imageUrl === "string" ? body.imageUrl : "",
+      address: typeof body.address === "string" ? body.address : "",
+      bookingUrl: typeof body.bookingUrl === "string" ? body.bookingUrl : "",
     });
 
     return NextResponse.json({

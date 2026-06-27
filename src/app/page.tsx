@@ -72,9 +72,6 @@ function HomeContent() {
     try {
       const data = await fetchHotels({
         keyword: condition.destination,
-        checkIn: condition.checkIn,
-        checkOut: condition.checkOut,
-        guests: condition.guests,
         page: condition.page,
         rakutenAreaCandidate: condition.rakutenAreaCandidate,
         onNotice: (message) => {
@@ -266,9 +263,6 @@ function HomeContent() {
                 <div className="grid gap-4">
                   {filteredHotels.map((hotel) => (
                     <HotelCard
-                      adults={searchCondition.guests}
-                      checkIn={searchCondition.checkIn}
-                      checkOut={searchCondition.checkOut}
                       hotel={hotel}
                       key={hotel.id}
                     />

@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import { DEFAULT_SEARCH_CONDITION } from "@/lib/searchParams";
-import { validateHotelSearch } from "@/lib/searchValidation";
 import type { RakutenAreaCandidate } from "@/types/rakutenArea";
 import type { BookingSite, MealPlan, SearchCondition, SortBy } from "@/types/search";
 
@@ -16,7 +15,7 @@ type SearchFormProps = {
 const fieldClassName =
   "min-h-14 w-full border-0 bg-transparent px-0 text-sm font-semibold text-slate-950 outline-none placeholder:text-slate-400 focus:ring-0";
 
-const FEATURE_OPTIONS = ["温泉", "禁煙", "駅近", "駐車場", "大浴場"];
+const FEATURE_OPTIONS = ["禁煙", "温泉", "大浴場", "インターネット利用可"];
 
 export default function SearchForm({
   onSearch,
@@ -25,9 +24,6 @@ export default function SearchForm({
   isLoading = false,
 }: SearchFormProps) {
   const [destination, setDestination] = useState(initialCondition.destination);
-  const [checkIn, setCheckIn] = useState(initialCondition.checkIn);
-  const [checkOut, setCheckOut] = useState(initialCondition.checkOut);
-  const [guests, setGuests] = useState(initialCondition.guests);
   const [sortBy, setSortBy] = useState<SortBy>(initialCondition.sortBy);
   const [mealPlan, setMealPlan] = useState<MealPlan>(initialCondition.mealPlan);
   const [minPrice, setMinPrice] = useState(
@@ -39,7 +35,6 @@ export default function SearchForm({
   const [site, setSite] = useState<BookingSite>(initialCondition.site);
   const [breakfastOnly, setBreakfastOnly] = useState(initialCondition.breakfastOnly);
   const [features, setFeatures] = useState<string[]>(initialCondition.features);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [rakutenAreaCandidate, setRakutenAreaCandidate] = useState<RakutenAreaCandidate>();
   const [areaCandidates, setAreaCandidates] = useState<RakutenAreaCandidate[]>([]);
   const [isLoadingAreas, setIsLoadingAreas] = useState(false);
@@ -47,9 +42,6 @@ export default function SearchForm({
 
   const handleReset = () => {
     setDestination(DEFAULT_SEARCH_CONDITION.destination);
-    setCheckIn(DEFAULT_SEARCH_CONDITION.checkIn);
-    setCheckOut(DEFAULT_SEARCH_CONDITION.checkOut);
-    setGuests(DEFAULT_SEARCH_CONDITION.guests);
     setSortBy(DEFAULT_SEARCH_CONDITION.sortBy);
     setMealPlan(DEFAULT_SEARCH_CONDITION.mealPlan);
     setMinPrice("");
@@ -60,7 +52,6 @@ export default function SearchForm({
     setRakutenAreaCandidate(undefined);
     setAreaCandidates([]);
     setAreaError(null);
-    setValidationMessage(null);
     onReset();
   };
 
@@ -107,17 +98,11 @@ export default function SearchForm({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const message = validateHotelSearch({ checkIn, checkOut, guests });
-    if (message) {
-      setValidationMessage(message);
-      return;
-    }
-    setValidationMessage(null);
     onSearch({
       destination,
-      checkIn,
-      checkOut,
-      guests,
+      checkIn: "",
+      checkOut: "",
+      guests: DEFAULT_SEARCH_CONDITION.guests,
       sortBy,
       mealPlan,
       minPrice: minPrice === "" ? null : Number(minPrice),
@@ -136,7 +121,7 @@ export default function SearchForm({
       noValidate
       onSubmit={handleSubmit}
     >
-      <div className="grid gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white lg:grid-cols-[2fr_1.1fr_1.1fr_0.85fr_auto]">
+      <div className="grid gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white lg:grid-cols-[minmax(0,1fr)_auto]">
         <div className="border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
           <label className="block text-xs font-bold text-slate-500" htmlFor="destination">
             目的地
@@ -193,50 +178,6 @@ export default function SearchForm({
             </ul>
           )}
         </div>
-
-        <label className="block border-b border-slate-200 p-4 lg:border-b-0 lg:border-r" htmlFor="checkIn">
-          <span className="text-xs font-bold text-slate-500">チェックイン</span>
-          <input
-            className={fieldClassName}
-            id="checkIn"
-            name="checkIn"
-            required
-            onChange={(event) => setCheckIn(event.target.value)}
-            type="date"
-            value={checkIn}
-          />
-        </label>
-
-        <label className="block border-b border-slate-200 p-4 lg:border-b-0 lg:border-r" htmlFor="checkOut">
-          <span className="text-xs font-bold text-slate-500">チェックアウト</span>
-          <input
-            className={fieldClassName}
-            id="checkOut"
-            min={checkIn ? getNextDate(checkIn) : undefined}
-            name="checkOut"
-            required
-            onChange={(event) => setCheckOut(event.target.value)}
-            type="date"
-            value={checkOut}
-          />
-        </label>
-
-        <label className="block border-b border-slate-200 p-4 lg:border-b-0 lg:border-r" htmlFor="guests">
-          <span className="text-xs font-bold text-slate-500">人数</span>
-          <select
-            className={fieldClassName}
-            id="guests"
-            name="guests"
-            onChange={(event) => setGuests(Number(event.target.value))}
-            value={guests}
-          >
-            <option value="1">1名</option>
-            <option value="2">2名</option>
-            <option value="3">3名</option>
-            <option value="4">4名</option>
-            <option value="5">5名以上</option>
-          </select>
-        </label>
 
         <div className="p-3">
           <button
@@ -381,17 +322,6 @@ export default function SearchForm({
           </button>
         </div>
       </div>
-      {validationMessage && (
-        <p className="mt-4 text-sm font-semibold text-rose-700" role="alert">
-          {validationMessage}
-        </p>
-      )}
     </form>
   );
-}
-
-function getNextDate(date: string): string {
-  const nextDate = new Date(`${date}T00:00:00Z`);
-  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
-  return nextDate.toISOString().slice(0, 10);
 }

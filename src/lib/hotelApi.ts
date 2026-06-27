@@ -73,9 +73,6 @@ export async function fetchHotels({
   if (typeof window !== "undefined") {
     const params = new URLSearchParams();
     if (keyword?.trim()) params.set("keyword", keyword.trim());
-    if (checkIn) params.set("checkIn", checkIn);
-    if (checkOut) params.set("checkOut", checkOut);
-    if (guests !== undefined) params.set("guests", String(guests));
     if (page && page > 1) params.set("page", String(page));
     if (limit) params.set("limit", String(limit));
     const resolvedAreaClassCode = rakutenAreaCandidate?.areaClassCode ?? areaClassCode;

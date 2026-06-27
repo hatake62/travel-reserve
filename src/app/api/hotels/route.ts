@@ -1,61 +1,10 @@
 import { getHotelProvider } from "@/lib/hotelProviders";
-import { fetchRakutenDateSpecificLowestPrice } from "@/lib/hotelProviders/rakutenDateSpecificPriceProvider";
 import { NextResponse } from "next/server";
-import { validateHotelSearch } from "@/lib/searchValidation";
 import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
-import type { Hotel } from "@/types/hotel";
 
-const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = Math.max(
-  0,
-  Math.min(3, Number(process.env.RAKUTEN_LIST_PRICE_ENRICH_LIMIT ?? "0") || 0),
-);
+const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = 0;
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 30;
-
-type DateSpecificPriceDebug = {
-  checkInDate?: string;
-  checkOutDate?: string;
-  adults?: number;
-  dateSpecificPriceEnabled: boolean;
-  dateSpecificPriceHotelLimit: number;
-  hotelCount: number;
-  pricedHotelCount: number;
-  notFoundCount: number;
-  errorCount: number;
-  notFoundReasonCounts: Record<string, number>;
-  attemptedRequestCount: number;
-  checkedCount: number;
-  notCheckedCount: number;
-  priceSourceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
-  fallbackCount: number;
-  priceSourceFieldCounts: Record<string, number>;
-  priceExtractionWarnings: string[];
-  priceSamples: Array<{
-    hotelId: string | number;
-    status: "available" | "not_found" | "error" | "invalid_hotel_id";
-    price: number | null;
-    sourcePriceField: "dailyCharge.total" | "dailyCharge.rakutenCharge";
-    matchedPlanCount: number;
-    rawPlanCount: number;
-    extractedPriceCount: number;
-    searchPatternsTried: string[];
-    pagesFetched: number;
-    notFoundReason?: string;
-    attemptedRequests: Array<{
-      searchPattern: "0" | "1";
-      page: number;
-      result: "success" | "data_not_found" | "http_error" | "rate_limited";
-      httpStatus?: number;
-      errorType?: string;
-    }>;
-  }>;
-};
-
-function getRakutenHotelId(hotel: Hotel): string | null {
-  if (String(hotel.id).startsWith("rakuten-")) return String(hotel.id);
-  const providerId = hotel.providerIds?.rakuten;
-  return providerId ? `rakuten-${providerId}` : null;
-}
 
 function parsePositiveInteger(value: string | null, defaultValue: number, max?: number): number {
   const parsed = Number(value);
@@ -63,176 +12,15 @@ function parsePositiveInteger(value: string | null, defaultValue: number, max?: 
   return max ? Math.min(parsed, max) : parsed;
 }
 
-async function applyDateSpecificPrices(
-  hotels: Hotel[],
-  {
-    checkIn,
-    checkOut,
-    guests,
-  }: {
-    checkIn: string;
-    checkOut: string;
-    guests: number;
-  },
-): Promise<{ hotels: Hotel[]; debug: DateSpecificPriceDebug }> {
-  const targetIndexes = hotels
-    .map((hotel, index) => ({ hotel, index, hotelId: getRakutenHotelId(hotel) }))
-    .filter((item): item is { hotel: Hotel; index: number; hotelId: string } =>
-      Boolean(item.hotelId),
-    )
-    .slice(0, DATE_SPECIFIC_PRICE_HOTEL_LIMIT);
-
-  const results = await Promise.all(
-    targetIndexes.map(async (target) => {
-      try {
-        const price = await fetchRakutenDateSpecificLowestPrice({
-          hotelId: target.hotelId,
-          checkInDate: checkIn,
-          checkOutDate: checkOut,
-          adults: guests,
-        });
-        return { ...target, price };
-      } catch {
-        return { ...target, price: null };
-      }
-    }),
-  );
-
-  const byIndex = new Map(results.map((result) => [result.index, result]));
-  const enrichedHotels = hotels.map((hotel, index) => {
-    const result = byIndex.get(index);
-    if (!result) return hotel;
-
-    const firstOffer = hotel.offers[0];
-    const price = result.price?.price ?? null;
-    const status = result.price?.status ?? "not_found";
-    return {
-      ...hotel,
-      offers: [
-        {
-          site: "楽天トラベル",
-          price,
-          bookingUrl:
-            result.price?.bookingUrl ||
-            result.price?.planListUrl ||
-            result.price?.hotelInformationUrl ||
-            firstOffer?.bookingUrl ||
-            "",
-          priceLabel: status === "available"
-            ? result.price?.sourcePriceField === "dailyCharge.rakutenCharge"
-              ? "指定日の参考価格"
-              : "指定日の最安値"
-            : "指定条件の料金未取得",
-          sourcePriceField: result.price?.sourcePriceField ?? "dailyCharge.total",
-          isDateSpecific: true,
-          checkInDate: checkIn,
-          checkOutDate: checkOut,
-          adults: guests,
-          planName: result.price?.planName,
-          roomName: result.price?.roomName,
-          matchedPlanCount: result.price?.matchedPlanCount ?? 0,
-          notFoundReason: result.price?.notFoundReason,
-          roomType:
-            result.price?.planName ||
-            result.price?.roomName ||
-            firstOffer?.roomType ||
-            "プラン詳細は予約サイトで確認",
-          hasBreakfast: firstOffer?.hasBreakfast ?? false,
-          cancellation: firstOffer?.cancellation ?? "予約サイトで確認",
-        },
-        ...hotel.offers.slice(1),
-      ],
-    };
-  });
-
-  const pricedHotelCount = results.filter((result) => result.price?.price).length;
-  const notFoundCount = results.filter(
-    (result) => result.price?.status === "not_found",
-  ).length;
-  const errorCount = results.filter(
-    (result) => result.price?.status === "error" || result.price === null,
-  ).length;
-  const notFoundReasonCounts = results.reduce<Record<string, number>>(
-    (counts, result) => {
-      const reason = result.price?.notFoundReason;
-      if (reason) counts[reason] = (counts[reason] ?? 0) + 1;
-      return counts;
-    },
-    {},
-  );
-  const attemptedRequestCount = results.reduce(
-    (count, result) => count + (result.price?.attemptedRequests.length ?? 0),
-    0,
-  );
-  const checkedCount = results.filter(
-    (result) => (result.price?.attemptedRequests.length ?? 0) > 0,
-  ).length;
-  const notCheckedCount = Math.max(
-    0,
-    hotels.filter((hotel) => Boolean(getRakutenHotelId(hotel))).length - targetIndexes.length,
-  );
-  const fallbackCount = results.filter(
-    (result) => result.price?.sourcePriceField === "dailyCharge.rakutenCharge",
-  ).length;
-  const priceSourceFieldCounts = results.reduce<Record<string, number>>(
-    (counts, result) => {
-      const field = result.price?.sourcePriceField;
-      if (field) counts[field] = (counts[field] ?? 0) + 1;
-      return counts;
-    },
-    {},
-  );
-  const priceExtractionWarnings = results.flatMap(
-    (result) => result.price?.warnings ?? [],
-  );
-
-  return {
-    hotels: enrichedHotels,
-    debug: {
-      checkInDate: checkIn,
-      checkOutDate: checkOut,
-      adults: guests,
-      dateSpecificPriceEnabled: true,
-      dateSpecificPriceHotelLimit: DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
-      hotelCount: hotels.length,
-      pricedHotelCount,
-      notFoundCount,
-      errorCount,
-      notFoundReasonCounts,
-      attemptedRequestCount,
-      checkedCount,
-      notCheckedCount,
-      priceSourceField: fallbackCount > 0 && pricedHotelCount === fallbackCount
-        ? "dailyCharge.rakutenCharge"
-        : "dailyCharge.total",
-      fallbackCount,
-      priceSourceFieldCounts,
-      priceExtractionWarnings,
-      priceSamples: results.slice(0, 5).map((result) => ({
-        hotelId: result.hotel.id,
-        status: result.price?.status ?? "not_found",
-        price: result.price?.price ?? null,
-        sourcePriceField: result.price?.sourcePriceField ?? "dailyCharge.total",
-        matchedPlanCount: result.price?.matchedPlanCount ?? 0,
-        rawPlanCount: result.price?.rawPlanCount ?? 0,
-        extractedPriceCount: result.price?.extractedPriceCount ?? 0,
-        searchPatternsTried: result.price?.searchPatternsTried ?? [],
-        pagesFetched: result.price?.pagesFetched ?? 0,
-        notFoundReason: result.price?.notFoundReason,
-        attemptedRequests: result.price?.attemptedRequests ?? [],
-      })),
-    },
-  };
-}
-
 export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
     const keyword = params.get("keyword") ?? undefined;
-    const checkIn = params.get("checkIn") ?? undefined;
-    const checkOut = params.get("checkOut") ?? undefined;
-    const guestsValue = params.get("guests");
-    const guests = guestsValue === null ? undefined : Number(guestsValue);
+    // Top search is hotel discovery only. Stay dates and guest count are handled
+    // in price tracking flows to avoid per-hotel vacant search API calls.
+    const checkIn = undefined;
+    const checkOut = undefined;
+    const guests = undefined;
     const areaClassCode = params.get("areaClassCode") ?? undefined;
     const middleClassCode = params.get("middleClassCode") ?? undefined;
     const smallClassCode = params.get("smallClassCode") ?? undefined;
@@ -243,21 +31,6 @@ export async function GET(request: Request) {
     const page = parsePositiveInteger(params.get("page"), 1);
     const limit = parsePositiveInteger(params.get("limit"), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const debug = params.get("debug") === "true";
-    const hasCompleteStayCondition = Boolean(checkIn && checkOut && guests);
-
-    if (hasCompleteStayCondition) {
-      const validationMessage = validateHotelSearch({ checkIn, checkOut, guests });
-      if (validationMessage) {
-        return NextResponse.json(
-          createApiErrorResponse(
-            validationMessage,
-            "チェックイン日、チェックアウト日、人数を確認してください",
-          ),
-          { status: 400 },
-        );
-      }
-    }
-
     const providerNotices: string[] = requestedDetailClassCode
       ? ["詳細地区コードは楽天API互換性のため使用せず、広い地区条件で検索しています。"]
       : [];
@@ -280,17 +53,22 @@ export async function GET(request: Request) {
     const resolvedPage = Math.min(page, totalPages);
     const offset = (resolvedPage - 1) * limit;
     const pageHotels = hotels.slice(offset, offset + limit);
-    const dateSpecific =
-      hasCompleteStayCondition && checkIn && checkOut && guests
-        ? await applyDateSpecificPrices(pageHotels, { checkIn, checkOut, guests })
-        : null;
-    const responseHotels = dateSpecific?.hotels ?? pageHotels;
-    const dateSpecificDebug = dateSpecific?.debug ?? {
-      checkInDate: checkIn,
-      checkOutDate: checkOut,
-      adults: guests,
+    const responseHotels = pageHotels.map((hotel) => ({
+      ...hotel,
+      offers: hotel.offers.map((offer) => ({
+        ...offer,
+        isDateSpecific: false,
+        priceLabel: offer.priceLabel ?? "参考最安値",
+        sourcePriceField: offer.sourcePriceField ?? "reference",
+      })),
+    }));
+    const dateSpecificDebug = {
       dateSpecificPriceEnabled: false,
       dateSpecificPriceHotelLimit: DATE_SPECIFIC_PRICE_HOTEL_LIMIT,
+      listPriceEnrichLimit: 0,
+      priceDisplayMode: "reference_on_search",
+      reason:
+        "Top search results are for hotel discovery. Date-specific prices are tracked only for favorite or watched hotels.",
       hotelCount: pageHotels.length,
       pricedHotelCount: 0,
       notFoundCount: 0,
@@ -366,15 +144,12 @@ export async function GET(request: Request) {
         encodeURIComponent(providerNotices.join(" / ")),
       );
     } else if (
-      (!hasCompleteStayCondition || !hasAreaCode) &&
-      process.env.USE_MOCK_HOTELS === "false"
+      !hasAreaCode && process.env.USE_MOCK_HOTELS === "false"
     ) {
       response.headers.set(
         "X-Hotel-Search-Notice",
         encodeURIComponent(
-          !hasAreaCode
-            ? "地区候補が未選択のため、キーワード検索結果を表示しています"
-            : "宿泊日または人数が不足しているため、キーワード検索結果を表示しています",
+          "地区候補が未選択のため、キーワード検索結果を表示しています",
         ),
       );
     }
@@ -386,7 +161,6 @@ export async function GET(request: Request) {
       message.includes("RAKUTEN_TRAVEL_") || message.includes("JALAN_API_KEY");
     const isRakutenForbiddenError =
       message.includes("楽天") && message.includes("HTTP 403");
-    const hasStayCondition = new URL(request.url).searchParams.has("checkIn");
     const providerHint = getProviderErrorHint(message);
     const responseMessage = message.includes("有効なホテルProviderがありません")
       ? "有効なホテルProviderがありません"
@@ -394,8 +168,6 @@ export async function GET(request: Request) {
       ? "楽天APIの取得に失敗しました"
       : isCredentialError
       ? `APIキーを確認してください: ${message}`
-      : hasStayCondition
-      ? `空室情報の取得に失敗しました: ${message}`
       : message || "ホテル情報の取得に失敗しました";
     return NextResponse.json(
       createApiErrorResponse(responseMessage, providerHint),

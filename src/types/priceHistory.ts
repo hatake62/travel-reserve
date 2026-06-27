@@ -48,6 +48,14 @@ export type PriceWatchTarget = PriceHistoryParams & {
   id?: string;
   provider: PriceSnapshotProvider;
   enabled: boolean;
+  mealPlan?: string;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  features?: string[];
+  hotelName?: string;
+  imageUrl?: string;
+  address?: string;
+  bookingUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 };

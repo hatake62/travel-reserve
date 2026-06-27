@@ -199,6 +199,17 @@ function mapTargetRow(row: QueryResultRow): PriceWatchTarget {
         : String(row.check_out_date),
     adults: Number(row.adults),
     enabled: Boolean(row.enabled),
+    mealPlan: row.meal_plan === undefined || row.meal_plan === null ? "" : String(row.meal_plan),
+    minPrice: row.min_price === undefined || row.min_price === null ? null : Number(row.min_price),
+    maxPrice: row.max_price === undefined || row.max_price === null ? null : Number(row.max_price),
+    features:
+      row.features === undefined || row.features === null || String(row.features).trim() === ""
+        ? []
+        : String(row.features).split(",").map((feature) => feature.trim()).filter(Boolean),
+    hotelName: row.hotel_name === undefined || row.hotel_name === null ? "" : String(row.hotel_name),
+    imageUrl: row.image_url === undefined || row.image_url === null ? "" : String(row.image_url),
+    address: row.address === undefined || row.address === null ? "" : String(row.address),
+    bookingUrl: row.booking_url === undefined || row.booking_url === null ? "" : String(row.booking_url),
     createdAt:
       row.created_at instanceof Date
         ? row.created_at.toISOString()
@@ -263,6 +274,14 @@ export async function getTrackedPriceTargets(): Promise<{
           check_out_date,
           adults,
           enabled,
+          meal_plan,
+          min_price,
+          max_price,
+          features,
+          hotel_name,
+          image_url,
+          address,
+          booking_url,
           created_at,
           updated_at
         FROM hotel_price_watch_targets
@@ -309,6 +328,14 @@ export async function getEnabledPriceWatchTargets(
           check_out_date,
           adults,
           enabled,
+          meal_plan,
+          min_price,
+          max_price,
+          features,
+          hotel_name,
+          image_url,
+          address,
+          booking_url,
           created_at,
           updated_at
         FROM hotel_price_watch_targets
@@ -355,6 +382,14 @@ export async function getPriceWatchTargets(): Promise<{
           check_out_date,
           adults,
           enabled,
+          meal_plan,
+          min_price,
+          max_price,
+          features,
+          hotel_name,
+          image_url,
+          address,
+          booking_url,
           created_at,
           updated_at
         FROM hotel_price_watch_targets
@@ -393,6 +428,14 @@ export async function addTrackedPriceTarget(
           check_out_date,
           adults,
           enabled,
+          meal_plan,
+          min_price,
+          max_price,
+          features,
+          hotel_name,
+          image_url,
+          address,
+          booking_url,
           created_at,
           updated_at
         FROM hotel_price_watch_targets
@@ -440,11 +483,29 @@ export async function addTrackedPriceTarget(
           check_out_date,
           adults,
           enabled,
+          meal_plan,
+          min_price,
+          max_price,
+          features,
+          hotel_name,
+          image_url,
+          address,
+          booking_url,
           updated_at
         )
-        VALUES ($1, $2, $3::date, $4::date, $5, TRUE, NOW())
+        VALUES ($1, $2, $3::date, $4::date, $5, TRUE, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
         ON CONFLICT (hotel_id, provider, check_in_date, check_out_date, adults)
-        DO UPDATE SET enabled = TRUE, updated_at = NOW()
+        DO UPDATE SET
+          enabled = TRUE,
+          meal_plan = EXCLUDED.meal_plan,
+          min_price = EXCLUDED.min_price,
+          max_price = EXCLUDED.max_price,
+          features = EXCLUDED.features,
+          hotel_name = EXCLUDED.hotel_name,
+          image_url = EXCLUDED.image_url,
+          address = EXCLUDED.address,
+          booking_url = EXCLUDED.booking_url,
+          updated_at = NOW()
         RETURNING
           id,
           hotel_id,
@@ -453,6 +514,14 @@ export async function addTrackedPriceTarget(
           check_out_date,
           adults,
           enabled,
+          meal_plan,
+          min_price,
+          max_price,
+          features,
+          hotel_name,
+          image_url,
+          address,
+          booking_url,
           created_at,
           updated_at
       `,
@@ -462,6 +531,14 @@ export async function addTrackedPriceTarget(
         target.checkInDate,
         target.checkOutDate,
         target.adults,
+        target.mealPlan ?? "",
+        target.minPrice ?? null,
+        target.maxPrice ?? null,
+        (target.features ?? []).join(","),
+        target.hotelName ?? "",
+        target.imageUrl ?? "",
+        target.address ?? "",
+        target.bookingUrl ?? "",
       ],
     );
   } catch (error) {
@@ -522,6 +599,14 @@ export async function disablePriceWatchTarget(
           check_out_date,
           adults,
           enabled,
+          meal_plan,
+          min_price,
+          max_price,
+          features,
+          hotel_name,
+          image_url,
+          address,
+          booking_url,
           created_at,
           updated_at
       `,

@@ -8,14 +8,6 @@ type SearchSummaryProps = {
   warning?: string | null;
 };
 
-function getNights(checkIn: string, checkOut: string): number | null {
-  if (!checkIn || !checkOut) return null;
-  const start = new Date(`${checkIn}T00:00:00Z`).getTime();
-  const end = new Date(`${checkOut}T00:00:00Z`).getTime();
-  const nights = Math.round((end - start) / 86400000);
-  return Number.isFinite(nights) && nights > 0 ? nights : null;
-}
-
 export default function SearchSummary({
   condition,
   displayedCount,
@@ -23,7 +15,6 @@ export default function SearchSummary({
   warning,
 }: SearchSummaryProps) {
   const destination = condition.destination.trim() || "条件に合う";
-  const nights = getNights(condition.checkIn, condition.checkOut);
   const total = pagination?.total ?? displayedCount;
 
   return (
@@ -35,9 +26,7 @@ export default function SearchSummary({
             {destination}のホテル {total}件
           </h2>
           <p className="mt-2 text-sm text-slate-600">
-            {condition.checkIn && condition.checkOut
-              ? `${condition.checkIn}から${nights ?? 1}泊・大人${condition.guests}名`
-              : `大人${condition.guests}名・日付未指定`}
+            トップ画面ではホテル候補を探します。宿泊日と人数は、詳細ページで価格追跡を開始するときに指定します。
           </p>
         </div>
         <p className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700" aria-live="polite">

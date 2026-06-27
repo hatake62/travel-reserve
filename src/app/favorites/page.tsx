@@ -3,12 +3,37 @@
 import EmptyState from "@/components/EmptyState";
 import HotelCard from "@/components/HotelCard";
 import { getFavoriteHotelsSnapshot, subscribeToFavoriteHotelIds, type FavoriteHotel } from "@/lib/favorites";
+import type { PriceWatchTarget } from "@/types/priceHistory";
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 export default function FavoritesPage() {
   const snapshot = useSyncExternalStore(subscribeToFavoriteHotelIds, getFavoriteHotelsSnapshot, () => "[]");
   const hotels = JSON.parse(snapshot) as FavoriteHotel[];
+  const [targets, setTargets] = useState<PriceWatchTarget[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/price-watch/targets", { headers: { Accept: "application/json" } })
+      .then((response) => response.json())
+      .then((data: { targets?: PriceWatchTarget[] }) => {
+        if (active) setTargets(data.targets ?? []);
+      })
+      .catch(() => {
+        if (active) setTargets([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const targetsByHotelId = new Map<string, PriceWatchTarget[]>();
+  for (const target of targets) {
+    const list = targetsByHotelId.get(target.hotelId) ?? [];
+    list.push(target);
+    targetsByHotelId.set(target.hotelId, list);
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-6xl">
@@ -38,6 +63,45 @@ export default function FavoritesPage() {
           <div className="grid items-start gap-5">
             {hotels.map((hotel) => (
               <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm" key={hotel.id}>
+                {(() => {
+                  const hotelTargets = targetsByHotelId.get(String(hotel.id)) ?? [];
+                  const enabledTargets = hotelTargets.filter((target) => target.enabled);
+                  return (
+                    <div className="mb-3 rounded-2xl bg-slate-50 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <span
+                          className={
+                            enabledTargets.length > 0
+                              ? "w-fit rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700"
+                              : "w-fit rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-600"
+                          }
+                        >
+                          {enabledTargets.length > 0 ? "価格追跡中" : "未追跡"}
+                        </span>
+                        <Link
+                          className="text-sm font-bold text-sky-700 hover:text-sky-900 focus:outline-none focus:ring-4 focus:ring-sky-200"
+                          href={`/hotels/${encodeURIComponent(String(hotel.id))}`}
+                        >
+                          宿泊日を指定して価格推移を見る
+                        </Link>
+                      </div>
+                      {enabledTargets.length > 0 ? (
+                        <div className="mt-3 grid gap-2">
+                          {enabledTargets.slice(0, 2).map((target) => (
+                            <p className="text-sm font-semibold text-slate-700" key={target.id ?? `${target.hotelId}-${target.checkInDate}`}>
+                              {target.checkInDate} - {target.checkOutDate} / 大人{target.adults}名
+                              {target.mealPlan ? ` / ${target.mealPlan}` : ""}
+                            </p>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-600">
+                          宿泊日を指定して価格追跡を開始すると、毎日の価格スナップショットを保存できます。
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="mb-3 flex flex-col gap-2 px-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
                   <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                     お気に入り

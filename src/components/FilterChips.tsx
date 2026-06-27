@@ -5,13 +5,6 @@ type FilterChipsProps = {
   onChange: (condition: SearchCondition) => void;
 };
 
-function formatDateRange(checkIn: string, checkOut: string): string {
-  if (!checkIn && !checkOut) return "";
-  if (!checkIn) return `〜 ${checkOut}`;
-  if (!checkOut) return `${checkIn} 〜`;
-  return `${checkIn} - ${checkOut}`;
-}
-
 function getMealPlanLabel(mealPlan: SearchCondition["mealPlan"]): string {
   if (mealPlan === "breakfast") return "朝食付き";
   if (mealPlan === "dinnerBreakfast") return "夕朝食付き";
@@ -31,22 +24,6 @@ export default function FilterChips({ condition, onChange }: FilterChipsProps) {
         page: 1,
         rakutenAreaCandidate: undefined,
       }),
-    });
-  }
-
-  if (condition.checkIn || condition.checkOut) {
-    chips.push({
-      key: "dates",
-      label: formatDateRange(condition.checkIn, condition.checkOut),
-      remove: () => ({ ...condition, checkIn: "", checkOut: "", page: 1 }),
-    });
-  }
-
-  if (condition.guests) {
-    chips.push({
-      key: "guests",
-      label: `大人${condition.guests}名`,
-      remove: () => ({ ...condition, guests: 2, page: 1 }),
     });
   }
 
