@@ -9,13 +9,18 @@ export type BookingSite =
   | "Yahoo!トラベル"
   | "一休.com";
 
+export type MealPlan = "" | "breakfast" | "dinnerBreakfast";
+
 export type SearchCondition = {
   destination: string;
   checkIn: string;
   checkOut: string;
   guests: number;
   sortBy: SortBy;
+  mealPlan: MealPlan;
+  minPrice: number | null;
   maxPrice: number | null;
+  features: string[];
   site: BookingSite;
   breakfastOnly: boolean;
   page: number;

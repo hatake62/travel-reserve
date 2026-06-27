@@ -1,4 +1,4 @@
-import type { BookingSite, SearchCondition, SortBy } from "@/types/search";
+import type { BookingSite, MealPlan, SearchCondition, SortBy } from "@/types/search";
 
 export const DEFAULT_SEARCH_CONDITION: SearchCondition = {
   destination: "",
@@ -6,7 +6,10 @@ export const DEFAULT_SEARCH_CONDITION: SearchCondition = {
   checkOut: "",
   guests: 2,
   sortBy: "recommended",
+  mealPlan: "",
+  minPrice: null,
   maxPrice: null,
+  features: [],
   site: "",
   breakfastOnly: false,
   page: 1,
@@ -27,12 +30,18 @@ const SITE_VALUES: BookingSite[] = [
   "一休.com",
 ];
 
+const MEAL_PLAN_VALUES: MealPlan[] = ["", "breakfast", "dinnerBreakfast"];
+
 function isSortBy(value: string): value is SortBy {
   return SORT_VALUES.some((sortBy) => sortBy === value);
 }
 
 function isBookingSite(value: string): value is BookingSite {
   return SITE_VALUES.some((site) => site === value);
+}
+
+function isMealPlan(value: string): value is MealPlan {
+  return MEAL_PLAN_VALUES.some((mealPlan) => mealPlan === value);
 }
 
 function parseGuests(value: string | null): number {
@@ -45,6 +54,12 @@ function parseMaxPrice(value: string | null): number | null {
   if (value === null || value.trim() === "") return null;
   const maxPrice = Number(value);
   return Number.isFinite(maxPrice) && maxPrice >= 0 ? maxPrice : null;
+}
+
+function parsePrice(value: string | null): number | null {
+  if (value === null || value.trim() === "") return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : null;
 }
 
 function parsePage(value: string | null): number {
@@ -66,9 +81,14 @@ export function searchConditionToParams(
   if (condition.sortBy !== DEFAULT_SEARCH_CONDITION.sortBy) {
     params.set("sortBy", condition.sortBy);
   }
+  if (condition.mealPlan) params.set("mealPlan", condition.mealPlan);
+  if (condition.minPrice !== null) {
+    params.set("minPrice", String(condition.minPrice));
+  }
   if (condition.maxPrice !== null) {
     params.set("maxPrice", String(condition.maxPrice));
   }
+  if (condition.features.length > 0) params.set("features", condition.features.join(","));
   if (condition.site) params.set("site", condition.site);
   if (condition.breakfastOnly) params.set("breakfastOnly", "true");
   if (condition.page > 1) params.set("page", String(condition.page));
@@ -89,6 +109,7 @@ export function searchParamsToCondition(
 ): SearchCondition {
   const sortBy = params.get("sortBy") ?? "";
   const site = params.get("site") ?? "";
+  const mealPlan = params.get("mealPlan") ?? "";
   const areaClassCode = params.get("areaClassCode") ?? "";
   const middleClassCode = params.get("middleClassCode") ?? "";
   const destination = params.get("destination") ?? "";
@@ -114,7 +135,13 @@ export function searchParamsToCondition(
     checkOut: params.get("checkOut") ?? "",
     guests: parseGuests(params.get("guests")),
     sortBy: isSortBy(sortBy) ? sortBy : DEFAULT_SEARCH_CONDITION.sortBy,
+    mealPlan: isMealPlan(mealPlan) ? mealPlan : DEFAULT_SEARCH_CONDITION.mealPlan,
+    minPrice: parsePrice(params.get("minPrice")),
     maxPrice: parseMaxPrice(params.get("maxPrice")),
+    features: (params.get("features") ?? "")
+      .split(",")
+      .map((feature) => feature.trim())
+      .filter(Boolean),
     site: isBookingSite(site) ? site : DEFAULT_SEARCH_CONDITION.site,
     breakfastOnly: params.get("breakfastOnly") === "true",
     page: parsePage(params.get("page")),

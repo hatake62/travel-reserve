@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { DEFAULT_SEARCH_CONDITION } from "@/lib/searchParams";
 import { validateHotelSearch } from "@/lib/searchValidation";
 import type { RakutenAreaCandidate } from "@/types/rakutenArea";
-import type { BookingSite, SearchCondition, SortBy } from "@/types/search";
+import type { BookingSite, MealPlan, SearchCondition, SortBy } from "@/types/search";
 
 type SearchFormProps = {
   onSearch: (condition: SearchCondition) => void;
@@ -13,8 +13,10 @@ type SearchFormProps = {
   isLoading?: boolean;
 };
 
-const inputClassName =
-  "h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-4 focus:ring-sky-100";
+const fieldClassName =
+  "min-h-14 w-full border-0 bg-transparent px-0 text-sm font-semibold text-slate-950 outline-none placeholder:text-slate-400 focus:ring-0";
+
+const FEATURE_OPTIONS = ["温泉", "禁煙", "駅近", "駐車場", "大浴場"];
 
 export default function SearchForm({
   onSearch,
@@ -27,11 +29,16 @@ export default function SearchForm({
   const [checkOut, setCheckOut] = useState(initialCondition.checkOut);
   const [guests, setGuests] = useState(initialCondition.guests);
   const [sortBy, setSortBy] = useState<SortBy>(initialCondition.sortBy);
+  const [mealPlan, setMealPlan] = useState<MealPlan>(initialCondition.mealPlan);
+  const [minPrice, setMinPrice] = useState(
+    initialCondition.minPrice === null ? "" : String(initialCondition.minPrice),
+  );
   const [maxPrice, setMaxPrice] = useState(
     initialCondition.maxPrice === null ? "" : String(initialCondition.maxPrice),
   );
   const [site, setSite] = useState<BookingSite>(initialCondition.site);
   const [breakfastOnly, setBreakfastOnly] = useState(initialCondition.breakfastOnly);
+  const [features, setFeatures] = useState<string[]>(initialCondition.features);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [rakutenAreaCandidate, setRakutenAreaCandidate] = useState<RakutenAreaCandidate>();
   const [areaCandidates, setAreaCandidates] = useState<RakutenAreaCandidate[]>([]);
@@ -44,9 +51,12 @@ export default function SearchForm({
     setCheckOut(DEFAULT_SEARCH_CONDITION.checkOut);
     setGuests(DEFAULT_SEARCH_CONDITION.guests);
     setSortBy(DEFAULT_SEARCH_CONDITION.sortBy);
+    setMealPlan(DEFAULT_SEARCH_CONDITION.mealPlan);
+    setMinPrice("");
     setMaxPrice("");
     setSite(DEFAULT_SEARCH_CONDITION.site);
     setBreakfastOnly(DEFAULT_SEARCH_CONDITION.breakfastOnly);
+    setFeatures([]);
     setRakutenAreaCandidate(undefined);
     setAreaCandidates([]);
     setAreaError(null);
@@ -109,9 +119,12 @@ export default function SearchForm({
       checkOut,
       guests,
       sortBy,
+      mealPlan,
+      minPrice: minPrice === "" ? null : Number(minPrice),
       maxPrice: maxPrice === "" ? null : Number(maxPrice),
+      features,
       site,
-      breakfastOnly,
+      breakfastOnly: breakfastOnly || mealPlan === "breakfast" || mealPlan === "dinnerBreakfast",
       page: 1,
       rakutenAreaCandidate,
     });
@@ -119,15 +132,18 @@ export default function SearchForm({
 
   return (
     <form
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/50 sm:p-6"
+      className="rounded-3xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70"
       noValidate
       onSubmit={handleSubmit}
     >
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="grid gap-2 text-sm font-semibold text-slate-700 lg:col-span-2">
-          目的地
+      <div className="grid gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white lg:grid-cols-[2fr_1.1fr_1.1fr_0.85fr_auto]">
+        <div className="border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+          <label className="block text-xs font-bold text-slate-500" htmlFor="destination">
+            目的地
+          </label>
           <input
-            className={inputClassName}
+            className={fieldClassName}
+            id="destination"
             name="destination"
             onChange={(event) => {
               setDestination(event.target.value);
@@ -139,17 +155,25 @@ export default function SearchForm({
             type="text"
             value={destination}
           />
-          <button
-            className="w-fit rounded-md border border-sky-700 px-3 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 disabled:cursor-wait disabled:border-slate-300 disabled:text-slate-400"
-            disabled={isLoadingAreas}
-            onClick={handleFindAreas}
-            type="button"
-          >
-            {isLoadingAreas ? "地区候補を取得中..." : "地区候補を検索"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              aria-label="楽天トラベルの地区候補を検索"
+              className="rounded-full border border-sky-700 px-3 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 disabled:cursor-wait disabled:border-slate-300 disabled:text-slate-400"
+              disabled={isLoadingAreas}
+              onClick={handleFindAreas}
+              type="button"
+            >
+              {isLoadingAreas ? "候補取得中" : "地区候補"}
+            </button>
+            {rakutenAreaCandidate && (
+              <span className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800" role="status">
+                地区選択済み
+              </span>
+            )}
+          </div>
           {areaError && <p className="text-xs text-rose-700" role="alert">{areaError}</p>}
           {areaCandidates.length > 0 && (
-            <ul className="grid gap-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <ul className="mt-2 grid gap-1 rounded-xl border border-slate-200 bg-slate-50 p-2">
               {areaCandidates.map((candidate) => (
                 <li key={`${candidate.areaClassCode}-${candidate.middleClassCode}-${candidate.smallClassCode}-${candidate.detailClassCode}-${candidate.displayName}`}>
                   <button
@@ -168,17 +192,13 @@ export default function SearchForm({
               ))}
             </ul>
           )}
-          {rakutenAreaCandidate && (
-            <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800" role="status">
-              選択中の地区：{rakutenAreaCandidate.label ?? rakutenAreaCandidate.displayName}
-            </p>
-          )}
         </div>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-700">
-          チェックイン日
+        <label className="block border-b border-slate-200 p-4 lg:border-b-0 lg:border-r" htmlFor="checkIn">
+          <span className="text-xs font-bold text-slate-500">チェックイン</span>
           <input
-            className={inputClassName}
+            className={fieldClassName}
+            id="checkIn"
             name="checkIn"
             required
             onChange={(event) => setCheckIn(event.target.value)}
@@ -187,10 +207,11 @@ export default function SearchForm({
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-700">
-          チェックアウト日
+        <label className="block border-b border-slate-200 p-4 lg:border-b-0 lg:border-r" htmlFor="checkOut">
+          <span className="text-xs font-bold text-slate-500">チェックアウト</span>
           <input
-            className={inputClassName}
+            className={fieldClassName}
+            id="checkOut"
             min={checkIn ? getNextDate(checkIn) : undefined}
             name="checkOut"
             required
@@ -200,10 +221,11 @@ export default function SearchForm({
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-700">
-          人数
+        <label className="block border-b border-slate-200 p-4 lg:border-b-0 lg:border-r" htmlFor="guests">
+          <span className="text-xs font-bold text-slate-500">人数</span>
           <select
-            className={inputClassName}
+            className={fieldClassName}
+            id="guests"
             name="guests"
             onChange={(event) => setGuests(Number(event.target.value))}
             value={guests}
@@ -216,10 +238,43 @@ export default function SearchForm({
           </select>
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-700">
+        <div className="p-3">
+          <button
+            aria-label="指定した条件でホテルを検索"
+            className="h-full min-h-12 w-full rounded-2xl bg-sky-700 px-7 text-base font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-wait disabled:bg-slate-400"
+            disabled={isLoading}
+            type="submit"
+          >
+            {isLoading ? "検索中" : "検索"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="mealPlan">
+          食事条件
+          <select
+            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
+            id="mealPlan"
+            name="mealPlan"
+            onChange={(event) => {
+              const nextMealPlan = event.target.value as MealPlan;
+              setMealPlan(nextMealPlan);
+              setBreakfastOnly(nextMealPlan === "breakfast" || nextMealPlan === "dinnerBreakfast");
+            }}
+            value={mealPlan}
+          >
+            <option value="">指定なし</option>
+            <option value="breakfast">朝食付き</option>
+            <option value="dinnerBreakfast">夕朝食付き</option>
+          </select>
+        </label>
+
+        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="sortBy">
           並び替え
           <select
-            className={inputClassName}
+            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
+            id="sortBy"
             name="sortBy"
             onChange={(event) => setSortBy(event.target.value as SortBy)}
             value={sortBy}
@@ -231,10 +286,27 @@ export default function SearchForm({
           </select>
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-700">
-          上限価格（1泊）
+        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="minPrice">
+          価格下限
           <input
-            className={inputClassName}
+            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
+            id="minPrice"
+            inputMode="numeric"
+            min="0"
+            name="minPrice"
+            onChange={(event) => setMinPrice(event.target.value)}
+            placeholder="例: 10000"
+            step="100"
+            type="number"
+            value={minPrice}
+          />
+        </label>
+
+        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="maxPrice">
+          価格上限
+          <input
+            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
+            id="maxPrice"
             inputMode="numeric"
             min="0"
             name="maxPrice"
@@ -246,10 +318,11 @@ export default function SearchForm({
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-700">
+        <label className="grid gap-1 text-xs font-bold text-slate-500" htmlFor="site">
           予約サイト
           <select
-            className={inputClassName}
+            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-100"
+            id="site"
             name="site"
             onChange={(event) => setSite(event.target.value as BookingSite)}
             value={site}
@@ -263,33 +336,48 @@ export default function SearchForm({
         </label>
       </div>
 
-      <div className="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-700">
-          <input
-            checked={breakfastOnly}
-            className="size-5 rounded border-slate-300 accent-sky-700 focus:ring-4 focus:ring-sky-100"
-            name="breakfastOnly"
-            onChange={(event) => setBreakfastOnly(event.target.checked)}
-            type="checkbox"
-          />
-          朝食ありのプランがあるホテルのみ
-        </label>
+      <div className="mt-4 flex flex-col gap-4 border-t border-slate-200 pt-4 lg:flex-row lg:items-center lg:justify-between">
+        <fieldset>
+          <legend className="mb-2 text-xs font-bold text-slate-500">こだわり条件</legend>
+          <div className="flex flex-wrap gap-2">
+            {FEATURE_OPTIONS.map((feature) => {
+              const checked = features.includes(feature);
+              return (
+                <label
+                  className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${
+                    checked
+                      ? "border-sky-700 bg-sky-50 text-sky-800"
+                      : "border-slate-300 bg-white text-slate-700 hover:border-sky-300"
+                  }`}
+                  key={feature}
+                >
+                  <input
+                    checked={checked}
+                    className="sr-only"
+                    onChange={(event) => {
+                      setFeatures((current) =>
+                        event.target.checked
+                          ? [...current, feature]
+                          : current.filter((value) => value !== feature),
+                      );
+                    }}
+                    type="checkbox"
+                  />
+                  {feature}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
-            className="h-12 rounded-lg border border-slate-300 bg-white px-6 text-base font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:cursor-wait disabled:text-slate-400"
+            className="h-11 rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:cursor-wait disabled:text-slate-400"
             disabled={isLoading}
             onClick={handleReset}
             type="button"
           >
             条件をリセット
-          </button>
-          <button
-            className="h-12 rounded-lg bg-sky-700 px-9 text-base font-bold text-white transition hover:bg-sky-800 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-wait disabled:bg-slate-400"
-            disabled={isLoading}
-            type="submit"
-          >
-            {isLoading ? "検索中..." : "この条件で検索"}
           </button>
         </div>
       </div>
