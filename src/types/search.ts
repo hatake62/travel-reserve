@@ -69,6 +69,7 @@ export type SearchCriteria = {
 export type HotelSearchParams = {
   keyword?: string;
   criteria?: SearchCriteria;
+  searchMaxHotels?: number;
   checkIn?: string;
   checkOut?: string;
   guests?: number;
@@ -99,4 +100,16 @@ export type HotelProviderDebugInfo = {
   detectedPattern?: string;
   apiRequestParamsSafe?: Record<string, string>;
   appliedApiFilters?: string[];
+  searchSkipped?: boolean;
+  reason?: string;
+  searchMaxHotels?: number;
+  hardLimit?: number;
+  hasDestination?: boolean;
+  hasFilters?: boolean;
+  rakutenHitsPerPage?: number;
+  rakutenPagesRequested?: number;
+  rakutenPagesFetched?: number;
+  rakutenPageResults?: number[];
+  rateLimitHit?: boolean;
+  cacheHit?: boolean;
 };

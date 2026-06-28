@@ -2,12 +2,37 @@ import { createApiErrorResponse, getProviderErrorHint } from "@/lib/apiError";
 import { applyHotelDiscoveryFilters } from "@/lib/hotelDiscoveryFilters";
 import { getHotelProvider } from "@/lib/hotelProviders";
 import { getLowestValidPrice } from "@/lib/price";
-import { searchParamsToCriteria } from "@/lib/searchParams";
+import {
+  hasHotelSearchCriteria,
+  hasHotelSearchFilters,
+  searchParamsToCriteria,
+} from "@/lib/searchParams";
 import type { Hotel } from "@/types/hotel";
 import type { SearchCriteriaSort } from "@/types/search";
 import { NextResponse } from "next/server";
 
 const DATE_SPECIFIC_PRICE_HOTEL_LIMIT = 0;
+const DEFAULT_PAGE_SIZE = 10;
+
+function parseEnvPositiveInteger(name: string, defaultValue: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
+function getSearchLimits(criteria: ReturnType<typeof searchParamsToCriteria>) {
+  const hardLimit = parseEnvPositiveInteger("RAKUTEN_SEARCH_MAX_HOTELS_HARD_LIMIT", 300);
+  const defaultMax = parseEnvPositiveInteger("RAKUTEN_SEARCH_MAX_HOTELS_DEFAULT", 120);
+  const withFiltersMax = parseEnvPositiveInteger("RAKUTEN_SEARCH_MAX_HOTELS_WITH_FILTERS", 180);
+  const hasDestination = Boolean(criteria.destination?.trim() || criteria.area);
+  const hasFilters = hasHotelSearchFilters(criteria);
+  const requested = hasDestination && hasFilters ? withFiltersMax : defaultMax;
+  return {
+    hardLimit,
+    hasDestination,
+    hasFilters,
+    searchMaxHotels: Math.min(requested, hardLimit),
+  };
+}
 
 function sortHotels(hotels: Hotel[], sort: SearchCriteriaSort | undefined): Hotel[] {
   return [...hotels].sort((a, b) => {
@@ -28,6 +53,50 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     const criteria = searchParamsToCriteria(params);
     const debug = params.get("debug") === "true";
+    const limits = getSearchLimits(criteria);
+    const emptyPagination = {
+      page: 1,
+      limit: criteria.limit || DEFAULT_PAGE_SIZE,
+      total: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrev: false,
+    };
+    if (!hasHotelSearchCriteria(criteria)) {
+      return NextResponse.json({
+        searchSkipped: true,
+        reason: "No search criteria provided.",
+        hotels: [],
+        pagination: emptyPagination,
+        warnings: [],
+        ...(debug
+          ? {
+              debug: {
+                searchSkipped: true,
+                reason: "No search criteria provided.",
+                searchMaxHotels: limits.searchMaxHotels,
+                hardLimit: limits.hardLimit,
+                hasDestination: false,
+                hasFilters: false,
+                rakutenHitsPerPage: 30,
+                rakutenPagesRequested: 0,
+                rakutenPagesFetched: 0,
+                rakutenPageResults: [],
+                rateLimitHit: false,
+                cacheHit: false,
+                rawHotelCount: 0,
+                mappedHotelCount: 0,
+                mergedHotelCount: 0,
+                beforeClientFilterCount: 0,
+                afterClientFilterCount: 0,
+                returnedCount: 0,
+                pagination: emptyPagination,
+                warnings: [],
+              },
+            }
+          : {}),
+      });
+    }
     const ignoredTopSearchParams = ["mealPlan", "checkIn", "checkOut", "guests"].filter((key) =>
       params.has(key),
     );
@@ -49,6 +118,7 @@ export async function GET(request: Request) {
       minPrice: criteria.minPrice,
       maxPrice: criteria.maxPrice,
       sort: criteria.sort,
+      searchMaxHotels: limits.searchMaxHotels,
       onNotice: (notice: string) => providerNotices.push(notice),
     });
     if (!result) throw new Error("ホテルProviderの検索結果を取得できませんでした。");
@@ -129,6 +199,12 @@ export async function GET(request: Request) {
       hotels: responseHotels,
       pagination,
       warnings,
+      searchMeta: {
+        searchMaxHotels: result.debug.searchMaxHotels ?? limits.searchMaxHotels,
+        hardLimit: result.debug.hardLimit ?? limits.hardLimit,
+        hasDestination: limits.hasDestination,
+        hasFilters: limits.hasFilters,
+      },
       ...(debug
         ? {
             debug: {
@@ -137,6 +213,17 @@ export async function GET(request: Request) {
               searchCriteria: criteria,
               apiRequestParamsSafe: result.debug.apiRequestParamsSafe ?? {},
               appliedFilters,
+              searchSkipped: false,
+              searchMaxHotels: result.debug.searchMaxHotels ?? limits.searchMaxHotels,
+              hardLimit: result.debug.hardLimit ?? limits.hardLimit,
+              hasDestination: result.debug.hasDestination ?? limits.hasDestination,
+              hasFilters: result.debug.hasFilters ?? limits.hasFilters,
+              rakutenHitsPerPage: result.debug.rakutenHitsPerPage ?? 30,
+              rakutenPagesRequested: result.debug.rakutenPagesRequested ?? 0,
+              rakutenPagesFetched: result.debug.rakutenPagesFetched ?? 0,
+              rakutenPageResults: result.debug.rakutenPageResults ?? [],
+              rateLimitHit: result.debug.rateLimitHit ?? false,
+              cacheHit: result.debug.cacheHit ?? false,
               keyword: criteria.destination ?? "",
               priceDisplayMode: "reference_on_search",
               dateSpecificPriceEnabled: false,
@@ -182,7 +269,6 @@ export async function GET(request: Request) {
               priceSourceFieldCounts: dateSpecificDebug.priceSourceFieldCounts,
               priceExtractionWarnings: dateSpecificDebug.priceExtractionWarnings,
               dateSpecificPriceNotCheckedCount: dateSpecificDebug.notCheckedCount,
-              rakutenPagesFetched: 2,
               dateSpecificPrice: dateSpecificDebug,
             },
           }

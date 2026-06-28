@@ -15,6 +15,7 @@ import { fetchHotels, HotelApiError, type HotelSearchPagination } from "@/lib/ho
 import { getLowestValidPrice } from "@/lib/price";
 import {
   DEFAULT_SEARCH_CONDITION,
+  hasHotelSearchCriteria,
   searchConditionToCriteria,
   searchConditionToParams,
   searchParamsToCondition,
@@ -58,6 +59,12 @@ function HomeContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<PageError | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [searchMeta, setSearchMeta] = useState<{
+    searchMaxHotels: number;
+    hardLimit: number;
+    hasDestination: boolean;
+    hasFilters: boolean;
+  } | null>(null);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [searchCondition, setSearchCondition] = useState<SearchCondition>(
     urlCondition,
@@ -70,12 +77,28 @@ function HomeContent() {
   const loadHotels = useCallback(async (condition: SearchCondition) => {
     const requestId = ++requestIdRef.current;
     setSearchCondition(condition);
+    const criteria = searchConditionToCriteria(condition);
+    if (!hasHotelSearchCriteria(criteria)) {
+      setHotels([]);
+      setPagination({
+        page: 1,
+        limit: criteria.limit,
+        total: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrev: false,
+      });
+      setSearchMeta(null);
+      setError(null);
+      setNoticeMessage(null);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     setNoticeMessage(null);
 
     try {
-      const criteria = searchConditionToCriteria(condition);
       const data = await fetchHotels({
         criteria,
         onNotice: (message) => {
@@ -85,6 +108,7 @@ function HomeContent() {
       if (requestId === requestIdRef.current) {
         setHotels(data.hotels);
         setPagination(data.pagination);
+        setSearchMeta(data.searchMeta ?? null);
         if (data.warnings.length > 0) setNoticeMessage(data.warnings.join(" / "));
       }
     } catch (error) {
@@ -98,6 +122,7 @@ function HomeContent() {
         });
         setHotels([]);
         setPagination(null);
+        setSearchMeta(null);
       }
     } finally {
       if (requestId === requestIdRef.current) setIsLoading(false);
@@ -220,6 +245,15 @@ function HomeContent() {
       return 0;
     });
   }, [hotels, searchCondition.sortBy]);
+  const hasCriteria = hasHotelSearchCriteria(searchConditionToCriteria(searchCondition));
+
+  const applyPopularDestination = (destination: string) => {
+    handleSearch({
+      ...DEFAULT_SEARCH_CONDITION,
+      destination,
+      page: 1,
+    });
+  };
 
   return (
     <LayoutShell>
@@ -244,6 +278,34 @@ function HomeContent() {
           />
           <FilterChips condition={searchCondition} onChange={applyCondition} />
 
+          {!hasCriteria ? (
+            <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-10">
+              <h2 className="text-2xl font-bold text-slate-950">
+                行き先や条件を入力して、気になるホテルを見つけましょう
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                まずは目的地を入力してください。お気に入りに追加すると、指定日の価格推移を毎日確認できます。
+              </p>
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  人気の検索
+                </p>
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  {["東京", "大阪", "京都", "沖縄", "札幌", "福岡"].map((destination) => (
+                    <button
+                      className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                      key={destination}
+                      onClick={() => applyPopularDestination(destination)}
+                      type="button"
+                    >
+                      {destination}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : (
+            <>
           <div className="mt-6 lg:hidden">
             <button
               className="h-11 w-full rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm"
@@ -274,6 +336,7 @@ function HomeContent() {
                   applyCondition({ ...searchCondition, sortBy: nextSortBy });
                 }}
                 pagination={pagination}
+                searchMeta={searchMeta}
                 sortBy={searchCondition.sortBy}
                 warning={noticeMessage}
               />
@@ -313,6 +376,8 @@ function HomeContent() {
               </div>
             </div>
           </section>
+            </>
+          )}
 
           <BottomValueCards />
 

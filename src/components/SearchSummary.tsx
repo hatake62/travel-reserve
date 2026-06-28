@@ -8,6 +8,12 @@ type SearchSummaryProps = {
   warning?: string | null;
   sortBy?: SortBy;
   onSortChange?: (sortBy: SortBy) => void;
+  searchMeta?: {
+    searchMaxHotels: number;
+    hardLimit: number;
+    hasDestination: boolean;
+    hasFilters: boolean;
+  } | null;
 };
 
 export default function SearchSummary({
@@ -17,6 +23,7 @@ export default function SearchSummary({
   warning,
   sortBy = "recommended",
   onSortChange,
+  searchMeta,
 }: SearchSummaryProps) {
   const destination = condition.destination.trim() || "条件に合う";
   const total = pagination?.total ?? displayedCount;
@@ -32,6 +39,11 @@ export default function SearchSummary({
           <p className="mt-2 text-sm leading-6 text-slate-600">
             参考最安値を表示しています。指定日の価格推移はお気に入り追加後に確認できます。
           </p>
+          {searchMeta && (
+            <p className="mt-2 text-xs font-semibold text-slate-500">
+              表示中の候補は最大{searchMeta.searchMaxHotels}件から絞り込んでいます。
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
           <label className="text-xs font-semibold text-slate-500" htmlFor="sortBy">

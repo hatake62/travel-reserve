@@ -17,8 +17,11 @@ const VACANT_HOTEL_SEARCH_ENDPOINT =
   "https://openapi.rakuten.co.jp/engine/api/Travel/VacantHotelSearch/20170426";
 const DEFAULT_KEYWORD = "東京";
 const RAKUTEN_LIST_HITS = 30;
-const RAKUTEN_LIST_PAGE_COUNT = 2;
 const MIN_AREA_RESULT_COUNT = 10;
+const DEFAULT_SEARCH_MAX_HOTELS = 120;
+const FILTERED_SEARCH_MAX_HOTELS = 180;
+const SEARCH_HARD_LIMIT = 300;
+const SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
 
 type RakutenHotelBasicInfo = {
   hotelNo?: number | string | null;
@@ -77,6 +80,13 @@ type ExtractedHotelBasicInfo = {
   pattern: string;
 };
 
+type SearchCacheEntry = {
+  expiresAt: number;
+  result: RakutenHotelFetchResult;
+};
+
+const searchCache = new Map<string, SearchCacheEntry>();
+
 const SAFE_RAKUTEN_PARAM_EXCLUDE = new Set([
   "applicationId",
   "accessKey",
@@ -89,6 +99,75 @@ function getSafeRakutenParams(params: URLSearchParams): Record<string, string> {
     if (!SAFE_RAKUTEN_PARAM_EXCLUDE.has(key)) safeParams[key] = value;
   });
   return safeParams;
+}
+
+function parsePositiveEnv(name: string, defaultValue: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
+function hasSearchFilters(options: RakutenVacantHotelParams): boolean {
+  const criteria = options.criteria;
+  return Boolean(
+    options.minPrice !== undefined ||
+      options.maxPrice !== undefined ||
+      criteria?.minPrice !== undefined ||
+      criteria?.maxPrice !== undefined ||
+      criteria?.minUserRating !== undefined ||
+      criteria?.minHotelClass !== undefined ||
+      (criteria?.amenities && criteria.amenities.length > 0),
+  );
+}
+
+function resolveSearchMaxHotels(options: RakutenVacantHotelParams): {
+  searchMaxHotels: number;
+  hardLimit: number;
+  hasDestination: boolean;
+  hasFilters: boolean;
+} {
+  const hardLimit = parsePositiveEnv(
+    "RAKUTEN_SEARCH_MAX_HOTELS_HARD_LIMIT",
+    SEARCH_HARD_LIMIT,
+  );
+  const defaultMax = parsePositiveEnv(
+    "RAKUTEN_SEARCH_MAX_HOTELS_DEFAULT",
+    DEFAULT_SEARCH_MAX_HOTELS,
+  );
+  const filteredMax = parsePositiveEnv(
+    "RAKUTEN_SEARCH_MAX_HOTELS_WITH_FILTERS",
+    FILTERED_SEARCH_MAX_HOTELS,
+  );
+  const hasDestination = Boolean(
+    options.keyword?.trim() ||
+      options.criteria?.destination?.trim() ||
+      options.rakutenAreaCandidate ||
+      options.areaClassCode ||
+      options.largeClassCode ||
+      options.middleClassCode ||
+      options.smallClassCode ||
+      options.detailClassCode,
+  );
+  const hasFilters = hasSearchFilters(options);
+  const requested = options.searchMaxHotels ?? (hasDestination && hasFilters ? filteredMax : defaultMax);
+  return {
+    searchMaxHotels: Math.min(requested, hardLimit),
+    hardLimit,
+    hasDestination,
+    hasFilters,
+  };
+}
+
+function createSearchCacheKey(
+  endpoint: string,
+  params: URLSearchParams,
+  maxHotels: number,
+): string {
+  const safeParams = new URLSearchParams();
+  [...params.entries()]
+    .filter(([key]) => !SAFE_RAKUTEN_PARAM_EXCLUDE.has(key) && key !== "page")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([key, value]) => safeParams.append(key, value));
+  return `rakuten-search:${endpoint}:${safeParams.toString()}:maxHotels:${maxHotels}`;
 }
 
 function parseRakutenResponse(body: string): RakutenHotelResponse | null {
@@ -450,6 +529,15 @@ async function fetchRakutenHotelsWithDebug(
   );
   const data = parseRakutenResponse(responseBody);
 
+  if (response.status === 429) {
+    return {
+      hotels: [],
+      debug: createRakutenDebug(0, 0, ["楽天APIのレート制限に達したため、取得済み候補だけを表示しています。"], {
+        rateLimitHit: true,
+      }),
+    };
+  }
+
   if (!data || !isRecord(data)) {
     if (!response.ok) {
       console.error("Rakuten Travel API request failed", {
@@ -576,19 +664,46 @@ async function fetchRakutenHotelPages(
   params: URLSearchParams,
   mapper: (entry: RakutenHotelEntry) => Hotel | null = mapRakutenKeywordHotelToHotel,
   diagnostics: Partial<HotelProviderDebugInfo> = {},
+  maxHotels = DEFAULT_SEARCH_MAX_HOTELS,
 ): Promise<RakutenHotelFetchResult> {
-  const pages = await Promise.all(
-    Array.from({ length: RAKUTEN_LIST_PAGE_COUNT }, async (_, index) => {
-      const pageParams = new URLSearchParams(params);
-      pageParams.set("page", String(index + 1));
-      return fetchRakutenHotelsWithDebug(endpoint, pageParams, mapper);
-    }),
+  const hardLimit = parsePositiveEnv(
+    "RAKUTEN_SEARCH_MAX_HOTELS_HARD_LIMIT",
+    SEARCH_HARD_LIMIT,
   );
+  const cappedMaxHotels = Math.max(0, Math.min(maxHotels, hardLimit));
+  const pageCount = Math.max(1, Math.ceil(cappedMaxHotels / RAKUTEN_LIST_HITS));
+  const cacheKey = createSearchCacheKey(endpoint, params, cappedMaxHotels);
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return {
+      hotels: cached.result.hotels,
+      debug: {
+        ...cached.result.debug,
+        cacheHit: true,
+      },
+    };
+  }
+
+  const pages: RakutenHotelFetchResult[] = [];
+  const pageResults: number[] = [];
+  let rateLimitHit = false;
+  for (let index = 0; index < pageCount; index += 1) {
+    const pageParams = new URLSearchParams(params);
+    pageParams.set("page", String(index + 1));
+    const result = await fetchRakutenHotelsWithDebug(endpoint, pageParams, mapper);
+    pages.push(result);
+    pageResults.push(result.hotels.length);
+    if (result.debug.rateLimitHit) {
+      rateLimitHit = true;
+      break;
+    }
+    if (result.hotels.length === 0) break;
+  }
   const warnings = pages.flatMap((result) => result.debug.warnings);
   const hotels = mergeHotelsByIdentity(pages.flatMap((result) => result.hotels));
   const firstDebug = pages[0]?.debug;
 
-  return {
+  const result = {
     hotels,
     debug: createRakutenDebug(
       pages.reduce((sum, result) => sum + result.debug.rawCount, 0),
@@ -600,15 +715,29 @@ async function fetchRakutenHotelPages(
         firstRawHotelHotelKeys: firstDebug?.firstRawHotelHotelKeys,
         detectedPattern: firstDebug?.detectedPattern,
         ...diagnostics,
+        searchMaxHotels: cappedMaxHotels,
+        hardLimit,
+        rakutenHitsPerPage: RAKUTEN_LIST_HITS,
+        rakutenPagesRequested: pageCount,
+        rakutenPagesFetched: pages.length,
+        rakutenPageResults: pageResults,
+        rateLimitHit,
+        cacheHit: false,
       },
     ),
   };
+  searchCache.set(cacheKey, {
+    expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+    result,
+  });
+  return result;
 }
 
 export async function getRakutenHotelsByKeyword({
   keyword,
+  ...options
 }: RakutenVacantHotelParams = {}): Promise<Hotel[]> {
-  return (await getRakutenHotelsByKeywordWithDebug({ keyword })).hotels;
+  return (await getRakutenHotelsByKeywordWithDebug({ keyword, ...options })).hotels;
 }
 
 export async function getRakutenHotelsByKeywordWithDebug({
@@ -623,6 +752,18 @@ export async function getRakutenHotelsByKeywordWithDebug({
   smallClassCode,
   detailClassCode,
 }: RakutenVacantHotelParams = {}): Promise<RakutenHotelFetchResult> {
+  const limits = resolveSearchMaxHotels({
+    keyword,
+    minPrice,
+    maxPrice,
+    sort,
+    rakutenAreaCandidate,
+    areaClassCode,
+    largeClassCode,
+    middleClassCode,
+    smallClassCode,
+    detailClassCode,
+  });
   const params = createRakutenParams(getRakutenCredentials());
   params.set("keyword", keyword?.trim() || DEFAULT_KEYWORD);
   params.set("hits", String(RAKUTEN_LIST_HITS));
@@ -657,7 +798,12 @@ export async function getRakutenHotelsByKeywordWithDebug({
   return fetchRakutenHotelPages(KEYWORD_SEARCH_ENDPOINT, params, mapRakutenKeywordHotelToHotel, {
     apiRequestParamsSafe: getSafeRakutenParams(params),
     appliedApiFilters,
-  });
+    searchMaxHotels: limits.searchMaxHotels,
+    hardLimit: limits.hardLimit,
+    hasDestination: limits.hasDestination,
+    hasFilters: limits.hasFilters,
+    rakutenHitsPerPage: RAKUTEN_LIST_HITS,
+  }, limits.searchMaxHotels);
 }
 
 function hasVacantSearchArea(params: RakutenVacantHotelParams): boolean {
@@ -699,6 +845,7 @@ export async function getRakutenVacantHotelsWithDebug(
   }
 
   const params = createRakutenParams(getRakutenCredentials());
+  const limits = resolveSearchMaxHotels(options);
   const area = options.rakutenAreaCandidate;
   params.set("checkinDate", checkIn);
   params.set("checkoutDate", checkOut);
@@ -743,7 +890,13 @@ export async function getRakutenVacantHotelsWithDebug(
       {
         apiRequestParamsSafe: getSafeRakutenParams(searchParams),
         appliedApiFilters,
+        searchMaxHotels: limits.searchMaxHotels,
+        hardLimit: limits.hardLimit,
+        hasDestination: limits.hasDestination,
+        hasFilters: limits.hasFilters,
+        rakutenHitsPerPage: RAKUTEN_LIST_HITS,
       },
+      limits.searchMaxHotels,
     );
   const fallBackToKeyword = async (): Promise<RakutenHotelFetchResult> => {
     const keywordResult = await getRakutenHotelsByKeywordWithDebug(options);

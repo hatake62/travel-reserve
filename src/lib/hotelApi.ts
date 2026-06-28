@@ -21,6 +21,14 @@ export type HotelSearchResponse = {
   hotels: Hotel[];
   pagination: HotelSearchPagination;
   warnings: string[];
+  searchSkipped?: boolean;
+  reason?: string;
+  searchMeta?: {
+    searchMaxHotels: number;
+    hardLimit: number;
+    hasDestination: boolean;
+    hasFilters: boolean;
+  };
 };
 
 export type FetchHotelsOptions = HotelSearchParams & {

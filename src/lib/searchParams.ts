@@ -260,6 +260,31 @@ export function searchParamsToCriteria(params: URLSearchParams): SearchCriteria 
   };
 }
 
+export function hasHotelSearchCriteria(criteria: SearchCriteria): boolean {
+  return Boolean(
+    criteria.destination?.trim() ||
+      criteria.area?.largeClassCode ||
+      criteria.area?.middleClassCode ||
+      criteria.area?.smallClassCode ||
+      criteria.area?.detailClassCode ||
+      criteria.minPrice !== undefined ||
+      criteria.maxPrice !== undefined ||
+      criteria.minUserRating !== undefined ||
+      criteria.minHotelClass !== undefined ||
+      (criteria.amenities && criteria.amenities.length > 0),
+  );
+}
+
+export function hasHotelSearchFilters(criteria: SearchCriteria): boolean {
+  return Boolean(
+    criteria.minPrice !== undefined ||
+      criteria.maxPrice !== undefined ||
+      criteria.minUserRating !== undefined ||
+      criteria.minHotelClass !== undefined ||
+      (criteria.amenities && criteria.amenities.length > 0),
+  );
+}
+
 export function searchParamsToCondition(
   params: URLSearchParams,
 ): SearchCondition {
